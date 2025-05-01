@@ -29,11 +29,26 @@ import com.google.firebase.storage.StorageReference;
 
 import java.io.File;
 
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
+import android.os.UserManager;
+
+
 @RequiresApi(api = Build.VERSION_CODES.O)
 public class MainActivity extends AppCompatActivity implements FragmentManager.OnBackStackChangedListener {
 
     private StorageReference storageRef;
     private LocationHelper locationHelper;
+
+    private final BroadcastReceiver unlockReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (Intent.ACTION_USER_UNLOCKED.equals(intent.getAction())) {
+                unregisterReceiver(this);
+                initializeAfterUnlock();
+            }
+        }
+    };
 
     DevicePolicyManager mDPM;
 
@@ -70,16 +85,20 @@ public class MainActivity extends AppCompatActivity implements FragmentManager.O
         //following line will keep the screen active
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        // initialize Firebase Auth
-        mAuth = FirebaseAuth.getInstance();
+        UserManager userManager = (UserManager) getSystemService(Context.USER_SERVICE);
+        if (userManager.isUserUnlocked()) {
+            initializeAfterUnlock();
+        } else {
+            IntentFilter filter = new IntentFilter(Intent.ACTION_USER_UNLOCKED);
+            registerReceiver(unlockReceiver, filter);
+        }
 
         //setup toolbar
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
         getSupportFragmentManager().addOnBackStackChangedListener(this);
 
-        //start service to get GPS and headings
-        startService(new Intent(this, SensorHelper.class));
+
 
         //stop firebase worker (from testing)
 //        WorkerWrapper.checkWorkerStatus(getApplicationContext());
@@ -90,8 +109,7 @@ public class MainActivity extends AppCompatActivity implements FragmentManager.O
 //        WorkerWrapper.startFirebaseWorker(getApplicationContext());
         WorkerWrapper.startSerialWorker(getApplicationContext());
 
-        //start firebase service
-        startService(new Intent(this, FirebaseService.class));
+
 
         //initialize Device Policy Manager (used for periodic restarts)
         mDPM = (DevicePolicyManager) getSystemService(Context.DEVICE_POLICY_SERVICE);
@@ -122,8 +140,6 @@ public class MainActivity extends AppCompatActivity implements FragmentManager.O
 
 
 
-       locationHelper = new LocationHelper(this);
-       locationHelper.startLocationUpdates();
 
         FirebaseStorage storage = FirebaseStorage.getInstance();
         storageRef = storage.getReference();
@@ -229,6 +245,21 @@ public class MainActivity extends AppCompatActivity implements FragmentManager.O
             }
         }
         super.onNewIntent(intent);
+    }
+
+    private void initializeAfterUnlock() {
+        // Firebase Auth
+        mAuth = FirebaseAuth.getInstance();
+
+        // Start GPS/heading service
+        startService(new Intent(this, SensorHelper.class));
+
+        // Start Firebase service
+        startService(new Intent(this, FirebaseService.class));
+
+        // Location tracking
+        locationHelper = new LocationHelper(this);
+        locationHelper.startLocationUpdates();
     }
 
     @Override

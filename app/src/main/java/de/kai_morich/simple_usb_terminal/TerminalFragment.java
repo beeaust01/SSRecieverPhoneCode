@@ -231,7 +231,7 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         super.onStart();
         getActivity().bindService(new Intent(getActivity(), SerialService.class), this, Context.BIND_AUTO_CREATE);
 
-        }
+    }
 
     /**
      * Inherited from Fragment. Called by the system. Unsubscribes from messages from the serial device
@@ -754,11 +754,23 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         receive(data);
     }
 
+    private int retryCount = 0;
+    private static final int MAX_RETRIES = 3;
+
     @Override
     public void onSerialIoError(Exception e) {
         status("connection lost: " + e.getMessage());
-//        status(Log.getStackTraceString(e));
         disconnect();
+
+        if (retryCount < MAX_RETRIES) {
+            retryCount++;
+            new Handler().postDelayed(() -> {
+                status("attempting reconnect... (attempt " + retryCount + ")");
+                connect();
+            }, 1500);
+        } else {
+            status("max retries reached, manual restart required");
+        }
     }
 
     private float[] listToArray(List<Float> list){
