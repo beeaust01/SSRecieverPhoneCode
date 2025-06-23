@@ -71,9 +71,16 @@ public class BGapi {
         //updated to reflect new extended advertisement report logic. Not totally sure why byte-by-
         //byte comparison is done, just following existing style for now.
         //
-        return bytes.length > 3 && bytes[0] == (byte) 0xA0 && bytes[1] == (byte) 0xF7
-                && bytes[2] == 0x05 && bytes[3] == 0x01;
+
+        //old identifyer
+//        return bytes.length > 3 && bytes[0] == (byte) 0xA0 && bytes[1] == (byte) 0xF7
+//                && bytes[2] == 0x05 && bytes[3] == 0x01;
+
+        //only accepts packets that say BYU
+        return bytes.length > 40 && bytes[34] == 0x04 && bytes[35] == 0x08
+                && bytes[36] == 0x42 && bytes[37] == 0x59 && bytes[38] == 0x55;
     }
+
 
     public static boolean isAngleOrBattResponse(byte[] bytes) {
 

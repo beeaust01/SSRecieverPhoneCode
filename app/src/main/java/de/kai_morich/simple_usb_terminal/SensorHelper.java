@@ -25,10 +25,10 @@ import androidx.annotation.RequiresApi;
  * TODO: do I need to deregister sensor event listeners?
  * TODO: May not actually need to be a service?
  * */
+
 public class SensorHelper extends Service implements SensorEventListener {
 
     float[] accelerometerReading = new float[3];
-
 
 
     static float[] magnetometerReading = new float[3];
@@ -49,8 +49,6 @@ public class SensorHelper extends Service implements SensorEventListener {
         Sensor magnetic = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
         sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL, SensorManager.SENSOR_DELAY_UI);
         sensorManager.registerListener(this, magnetic, SensorManager.SENSOR_DELAY_NORMAL, SensorManager.SENSOR_DELAY_UI);
-
-
     }
 
     /**
@@ -72,6 +70,7 @@ public class SensorHelper extends Service implements SensorEventListener {
      * Returns the most recent measurement of the axis perpendicular to the surface of the earth
      * (I think)
      * */
+
     public static double getMagnetometerReadingSingleDim() {
         return heading;
     }
@@ -86,13 +85,17 @@ public class SensorHelper extends Service implements SensorEventListener {
      * subscribed to (accelerometer, magnetometer). Does the math and saves the new heading
      * todo: is the math correct?
      * */
+
     @Override
     public void onSensorChanged(SensorEvent event) {
         if (event == null)
             return;
+
         if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
             accelerometerReading = event.values;
-        } else if (event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD) {
+        }
+
+        else if (event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD) {
             magnetometerReading = event.values;
         }
 
@@ -100,6 +103,7 @@ public class SensorHelper extends Service implements SensorEventListener {
         SensorManager.getRotationMatrix(rotationMatrix, null, accelerometerReading, magnetometerReading);
         float[] orientation = SensorManager.getOrientation(rotationMatrix, new float[3]);
         heading = (Math.toDegrees(orientation[0]));
+
     }
 
     /**

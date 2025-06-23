@@ -35,6 +35,7 @@ public class BlePacket {
     private byte packet_type;
     private byte[] data;
 
+
     /**
      * Constructor that grabs all necessary details about the current state of the device
      *  (datetime, heading, location), and stores them with the details of the packet
@@ -90,18 +91,28 @@ public class BlePacket {
             //192 bytes of recorded capacitance data
 
 
-        if (bytes.length < 31)
+        if (bytes.length < 41)
             return null;
+//        if (bytes.length > 600) {
+//            System.out.println("parsePacket: rejected overlong input of length " + bytes.length);
+//            return null;
+//        }
         String addr = "";
-        for(int i = 9; i > 4; i--){
+        for(int i = 18; i > 12; i--){ //extended BLE UUID
+        //for(int i = 9; i > 4; i--){ //Legacy BLE way
+        //for(int i = 0; i < 40; i++){//testing
             addr += String.format("%02X", bytes[i]) + ":";
         }
         addr = addr.substring(0, addr.length() - 1);
         byte packet_type = 0;
-        byte rssi = bytes[17];
-        byte channel = bytes[18];
+        byte rssi = bytes[25]; //17 for legacy BLE
+        byte channel = bytes[26]; //18 for legacy BLE
 
-        byte[] data = Arrays.copyOfRange(bytes, 31, bytes.length);
+        //byte[] data = Arrays.copyOfRange(bytes, 41, 284); //31 to byte.len for legacy BLE
+        int dataStart =39;
+        int dataEnd = Math.min(bytes.length, 288);  // Never go past byte 287
+        byte[] data = Arrays.copyOfRange(bytes, dataStart, dataEnd);
+
         return new BlePacket(addr, rssi, channel, packet_type, data);
     }
 
@@ -118,6 +129,14 @@ public class BlePacket {
             e.printStackTrace();
         }
     }
+
+
+    public boolean isComplete() {
+        if(data == null)
+            return false;
+        return data.length >= 568;
+    }
+
 
 
     /**

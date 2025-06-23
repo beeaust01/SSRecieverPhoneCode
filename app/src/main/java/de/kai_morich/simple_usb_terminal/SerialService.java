@@ -245,17 +245,17 @@ public class SerialService extends Service implements SerialListener {
                         case IN_BOUNDS_CW: // 0<--|====== >-> ====|-->360
                             // turn around once we pass the max
                             if (OutsideUpperBound(currentHeading)) {
-                                rotationState = RotationState.RETURNING_TO_BOUNDS_CW;
+                                rotationState = RotationState.RETURNING_TO_BOUNDS_CCW;
                             } else if (OutsideLowerBound(currentHeading)) {             // if it gets off, make sure it knows it's outside bounds
-                                rotationState = RotationState.RETURNING_TO_BOUNDS_CCW;   // and set it on a course towards what is most likely the nearest bound
+                                rotationState = RotationState.RETURNING_TO_BOUNDS_CW;   // and set it on a course towards what is most likely the nearest bound
                             }
                             break;
                         case IN_BOUNDS_CCW: // 0<--|== <-< ======|-->360
                             // turn around once we pass the min
                             if (OutsideLowerBound(currentHeading)) {
-                                rotationState = RotationState.RETURNING_TO_BOUNDS_CCW;
+                                rotationState = RotationState.RETURNING_TO_BOUNDS_CW;
                             } else if (OutsideUpperBound(currentHeading)) {             // if it gets off, make sure it knows it's outside bounds
-                                rotationState = RotationState.RETURNING_TO_BOUNDS_CW;  // and set it on a course towards what is most likely the nearest bound
+                                rotationState = RotationState.RETURNING_TO_BOUNDS_CCW;  // and set it on a course towards what is most likely the nearest bound
                             }
                             break;
                         case RETURNING_TO_BOUNDS_CW: // 0<-- >-> |========|-->360
@@ -263,7 +263,7 @@ public class SerialService extends Service implements SerialListener {
                             //   and continue CW
                             if (InsideBounds(currentHeading)) {
                                 rotationState = RotationState.IN_BOUNDS_CW;
-                            } else if (OutsideLowerBound(currentHeading)) {             // if it gets off, make sure it knows it's outside the other bound
+                            } else if (OutsideUpperBound(currentHeading)) {             // if it gets off, make sure it knows it's outside the other bound
                                 rotationState = RotationState.RETURNING_TO_BOUNDS_CCW;  // and set it on a course towards what is most likely the nearest bound
                             }
                             break;
@@ -272,7 +272,7 @@ public class SerialService extends Service implements SerialListener {
                             //   and continue CCW
                             if (InsideBounds(currentHeading)) {
                                 rotationState = RotationState.IN_BOUNDS_CCW;
-                            } else if (OutsideUpperBound(currentHeading)) {             // if it gets off, make sure it knows it's outside the other bound
+                            } else if (OutsideLowerBound(currentHeading)) {             // if it gets off, make sure it knows it's outside the other bound
                                 rotationState = RotationState.RETURNING_TO_BOUNDS_CW;   // and set it on a course towards what is most likely the nearest bound
                             }
                             break;
@@ -762,9 +762,15 @@ public class SerialService extends Service implements SerialListener {
                 //If the data isn't any kind of thing we can recognize, assume it's incomplete
 
                 //If there's already partial data waiting
-                if (pendingBytes != null) {
+                if (pendingBytes != null && !pendingPacket.isComplete()){ // !pendingPacket.isComplete(pendingBytes.length)) {
+//                    if (pendingBytes.length > 566) {  // or whatever threshold is sane for your packet size //attempted fix of firebase files being too long
+//                        Log.w("SerialService", "pendingBytes exceeded size limit; clearing buffer");
+//                        pendingBytes = null;
+//                    }
                     //add this data to the end of it
                     pendingBytes = appendByteArray(pendingBytes, data);
+
+
 
                     //and try to parse it again
                     BlePacket temp = BlePacket.parsePacket(pendingBytes);
@@ -773,11 +779,12 @@ public class SerialService extends Service implements SerialListener {
                         pendingBytes = null;
                     }
                 }
-                //and it not, try to add it to the end of pending packet
-                else if (pendingPacket != null) {
+                //and if not, try to add it to the end of pending packet
+                else if (pendingPacket != null && !pendingPacket.isComplete()) {
                     //todo: instead of just appending random data, check what it is (consider max possible length of packet)
                     //we should never be appending data to an already finsihed packet
                     pendingPacket.appendData(data);
+
                 }
             }
 
