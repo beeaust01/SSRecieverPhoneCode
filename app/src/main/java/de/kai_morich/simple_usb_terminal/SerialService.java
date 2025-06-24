@@ -699,7 +699,7 @@ public class SerialService extends Service implements SerialListener {
                     //send the angle and rotation state to terminal fragment to be displayed onscreen
                     send_heading_intent();
 
-                //get battery voltage
+                    //get battery voltage
                 } else if (data[data.length - 1] == (byte) 0xF0) {
 
                     byte[] lastTwoBytes = new byte[2];
@@ -746,31 +746,25 @@ public class SerialService extends Service implements SerialListener {
                     e.printStackTrace();
                 }
             } else if("message_rotate_ccw_rsp".equals(BGapi.getResponseName(data))) {
-              if (lastCommand == null || !lastCommand.equals(BGapi.ROTATE_CCW)) {
-                  if (lastEventTime < 0) {
-                      lastEventTime = System.currentTimeMillis();
-                      System.out.print("ERROR: unexpected " + BGapi.getResponseName(data) +  " rsp received for the first time\n");
-                  } else {
-                      long timeElapsed = System.currentTimeMillis() - lastEventTime;
-                      lastEventTime = System.currentTimeMillis();
-                      System.out.print("ERROR: unexpected " + BGapi.getResponseName(data) +  " received after " + timeElapsed/1000 + " seconds\n");
-                  }
-                  write(TextUtil.fromHexString(BGapi.ROTATE_STOP));
-              }
+                if (lastCommand == null || !lastCommand.equals(BGapi.ROTATE_CCW)) {
+                    if (lastEventTime < 0) {
+                        lastEventTime = System.currentTimeMillis();
+                        System.out.print("ERROR: unexpected " + BGapi.getResponseName(data) +  " rsp received for the first time\n");
+                    } else {
+                        long timeElapsed = System.currentTimeMillis() - lastEventTime;
+                        lastEventTime = System.currentTimeMillis();
+                        System.out.print("ERROR: unexpected " + BGapi.getResponseName(data) +  " received after " + timeElapsed/1000 + " seconds\n");
+                    }
+                    write(TextUtil.fromHexString(BGapi.ROTATE_STOP));
+                }
             }
             else if (!BGapi.isKnownResponse(data)) {
                 //If the data isn't any kind of thing we can recognize, assume it's incomplete
 
                 //If there's already partial data waiting
-                if (pendingBytes != null && !pendingPacket.isComplete()){ // !pendingPacket.isComplete(pendingBytes.length)) {
-//                    if (pendingBytes.length > 566) {  // or whatever threshold is sane for your packet size //attempted fix of firebase files being too long
-//                        Log.w("SerialService", "pendingBytes exceeded size limit; clearing buffer");
-//                        pendingBytes = null;
-//                    }
+                if (pendingBytes != null) {
                     //add this data to the end of it
                     pendingBytes = appendByteArray(pendingBytes, data);
-
-
 
                     //and try to parse it again
                     BlePacket temp = BlePacket.parsePacket(pendingBytes);
@@ -779,12 +773,11 @@ public class SerialService extends Service implements SerialListener {
                         pendingBytes = null;
                     }
                 }
-                //and if not, try to add it to the end of pending packet
-                else if (pendingPacket != null && !pendingPacket.isComplete()) {
+                //and it not, try to add it to the end of pending packet
+                else if (pendingPacket != null) {
                     //todo: instead of just appending random data, check what it is (consider max possible length of packet)
                     //we should never be appending data to an already finsihed packet
                     pendingPacket.appendData(data);
-
                 }
             }
 

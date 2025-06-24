@@ -706,7 +706,7 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
             //until the data has a terminator, assume packets that aren't a known header are data that was truncated
             if (pendingPacket != null)
                 pendingPacket.appendData(data);
-        } //commented out this else statement 6/10 by Austin Bee because it was causing all the packets to be stuck together.
+        }
 
         //If the text in receiveText is getting too large to be reasonable, cut it off
         if(receiveText.getText().length() > 8000){
