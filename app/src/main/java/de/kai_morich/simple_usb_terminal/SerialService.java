@@ -22,6 +22,8 @@ import androidx.annotation.RequiresApi;
 import androidx.core.app.NotificationCompat;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
+import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -135,6 +137,16 @@ public class SerialService extends Service implements SerialListener {
     public static final String KEY_HEADING_MIN_AS_MAX_ACTION = "SerialService.headingRangePositiveAction";
     public static final String KEY_HEADING_MIN_AS_MAX_STATE = "SerialService.headingRangePositiveState";
 
+    // Packet buffering fields for improved serial communication
+    private final Object packetLock = new Object();
+    private byte[] packetBuffer = new byte[0];
+    private static final int MAX_PACKET_SIZE = 1024; // Adjust based on your protocol
+    private static final int MIN_PACKET_SIZE = 4; 
+    
+    // Processing queue for ordered operations
+    private final Queue<Runnable> processingQueue = new LinkedList<>();
+    private final Object processingLock = new Object();
+
     public static SerialService getInstance() {
         return instance;
     }
@@ -152,9 +164,119 @@ public class SerialService extends Service implements SerialListener {
      *
      */
     void print_to_terminal(String input) {
+        // Write to log file
+        writeToLogFile(input);
+        
+        // Original terminal printing logic
         Intent intent = new Intent(TerminalFragment.GENERAL_PURPOSE_PRINT);
         intent.putExtra(TerminalFragment.GENERAL_PURPOSE_STRING, input);
         LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(intent);
+    }
+
+    /**
+     * Write message to log file with timestamp
+     */
+    private void writeToLogFile(String message) {
+        try {
+            // Get external storage directory
+            File externalDir = getExternalFilesDir(null);
+            if (externalDir != null) {
+                File logFile = new File(externalDir, "serial_debug.log");
+                
+                // Create timestamp
+                String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
+                String logEntry = timestamp + " - " + message + "\n";
+                
+                // Append to file
+                FileWriter writer = new FileWriter(logFile, true);
+                writer.write(logEntry);
+                writer.close();
+            }
+        } catch (IOException e) {
+            Log.e("SerialService", "Error writing to log file", e);
+        }
+    }
+
+    /**
+     * Get the path to the debug log file
+     */
+    public String getLogFilePath() {
+        File externalDir = getExternalFilesDir(null);
+        if (externalDir != null) {
+            File logFile = new File(externalDir, "serial_debug.log");
+            return logFile.getAbsolutePath();
+        }
+        return null;
+    }
+
+    /**
+     * Clear the debug log file
+     */
+    public void clearLogFile() {
+        try {
+            File externalDir = getExternalFilesDir(null);
+            if (externalDir != null) {
+                File logFile = new File(externalDir, "serial_debug.log");
+                if (logFile.exists()) {
+                    logFile.delete();
+                }
+                print_to_terminal("Log file cleared");
+            }
+        } catch (Exception e) {
+            Log.e("SerialService", "Error clearing log file", e);
+        }
+    }
+
+    /**
+     * Debug method to analyze current buffer contents
+     */
+    public void debugBufferContents() {
+        synchronized (packetLock) {
+            print_to_terminal("=== BUFFER DEBUG ===");
+            print_to_terminal("Buffer size: " + packetBuffer.length);
+            if (packetBuffer.length > 0) {
+                print_to_terminal("First 32 bytes: " + bytesToHex(Arrays.copyOfRange(packetBuffer, 0, Math.min(32, packetBuffer.length))));
+                if (packetBuffer.length > 32) {
+                    print_to_terminal("Last 16 bytes: " + bytesToHex(Arrays.copyOfRange(packetBuffer, packetBuffer.length - 16, packetBuffer.length)));
+                }
+            }
+            
+            // Search for BLE packet pattern
+            int patternPos = findPacketPattern(packetBuffer);
+            if (patternPos >= 0) {
+                print_to_terminal("BLE Pattern found at position: " + patternPos);
+                int packetStart = patternPos - 29;
+                int packetEnd = patternPos + 203;
+                print_to_terminal("Would extract BLE packet from " + packetStart + " to " + packetEnd);
+                
+                if (packetStart >= 0 && packetEnd <= packetBuffer.length) {
+                    print_to_terminal("BLE packet extraction would be complete");
+                } else {
+                    print_to_terminal("BLE packet extraction would be incomplete");
+                }
+            } else {
+                print_to_terminal("BLE Pattern not found in buffer");
+            }
+            
+            // Search for angle/battery pattern
+            int angleBattPos = findAngleBatteryPattern(packetBuffer);
+            if (angleBattPos >= 0) {
+                print_to_terminal("Angle/Battery Pattern found at position: " + angleBattPos);
+                int packetStart = angleBattPos;
+                int packetEnd = angleBattPos + 8;
+                print_to_terminal("Would extract angle/battery packet from " + packetStart + " to " + packetEnd);
+                
+                if (packetEnd <= packetBuffer.length) {
+                    print_to_terminal("Angle/Battery packet extraction would be complete");
+                } else {
+                    print_to_terminal("Angle/Battery packet extraction would be incomplete");
+                }
+            } else {
+                print_to_terminal("Angle/Battery Pattern not found in buffer");
+            }
+            
+            print_to_terminal("=== END BUFFER DEBUG ===");
+        }
     }
 
     void send_heading_intent() {
@@ -645,143 +767,26 @@ public class SerialService extends Service implements SerialListener {
 
     public void onSerialRead(byte[] data) throws IOException {
         if (connected) {
-            //TODO find a more organized way to do this parsing
-
-            // parse here to determine if it should be sent to FirebaseService too
-            if (BGapi.isScanReportEvent(data)) {
-                //this is the beginning of a new report event, therefore we assume that
-                // if a packet is pending, it is complete and save it before parsing the most
-                // recent data
-                if (pendingPacket != null) {
-                    FirebaseService.Companion.getServiceInstance().appendFile(pendingPacket.toCSV());
+            // Thread-safe packet buffering
+            synchronized (packetLock) {
+                // Append new data to buffer
+                packetBuffer = appendByteArray(packetBuffer, data);
+                
+                // Process complete packets from buffer
+                while (processNextPacket()) {
+                    // Continue processing until no complete packets remain
                 }
-
-                BlePacket temp = BlePacket.parsePacket(data);
-                //did the new data parse successfully?
-                if (temp != null) {
-                    //Yes - save the packet
-                    pendingPacket = temp;
-                } else {
-                    //No - save the raw bytes
-                    pendingBytes = data;
-                }
-
-            } else if (BGapi.isAngleOrBattResponse(data)) {
-//                System.out.print("isAngleOrBattResponse()");
-
-                if (data[data.length - 1] == (byte) 0xFF) {
-                    byte[] lastTwoBytes = new byte[2];
-//             Extract the last 2 bytes
-                    System.arraycopy(data, data.length - 3, lastTwoBytes, 0, 2); //data bytes are in 14th and 15th positions in the array
-
-//             Extract the most significant 12 bits into an integer
-                    int pot_bits = ((lastTwoBytes[0] & 0xFF) << 4) | ((lastTwoBytes[1] & 0xF0) >>> 4);
-
-//             multiply by 1/2^12 (adc resolution)
-                    float pot_voltage = (float) (pot_bits * 0.002);
-
-                    //voltage scales from 0.037 to 2.98 across 450 degrees of rotation (need measurements for angle extent on either side
-                    //angle should be ((angle_voltage - 0.037) / (2.98 - 0.028) * 450) - some_offset
-                    //with the offset depending on how we want to deal with wrapping around 0
-                    // so we can keep
-                    potAngle = (float) (((pot_voltage - 0.332) / (2.7 - 0.332)) * 360);
-
-                    Boolean isMoving = angleMeasSeries.addMeasurementFiltered(potAngle);
-                    //stop rotation in event of an erroneous input
-                    if (isMoving && !shouldbeMoving) {
-                        write(TextUtil.fromHexString(BGapi.ROTATE_STOP));
-                        System.out.println("Stopped Erroneous Rotation");
-                    }
-
-
-                    lastHeadingTime = LocalDateTime.now();
-
-                    //send the angle and rotation state to terminal fragment to be displayed onscreen
-                    send_heading_intent();
-
-                    //get battery voltage
-                } else if (data[data.length - 1] == (byte) 0xF0) {
-
-                    byte[] lastTwoBytes = new byte[2];
-//              Extract the last 2 bytes
-                    System.arraycopy(data, data.length - 3, lastTwoBytes, 0, 2); //data bytes are in 14th and 15th positions in the array
-
-//              Extract the most significant 12 bits into an integer
-                    int batt_bits = ((lastTwoBytes[0] & 0xFF) << 4) | ((lastTwoBytes[1] & 0xF0) >>> 4);
-
-//              multiply by 1/2^12 (adc resolution)
-                    float batt_voltage = ((float) (batt_bits * 0.002)) * 6; //multiply by 6 for voltage divider
-
-                    lastBatteryVoltage = batt_voltage;
-
-                    System.out.print("Battery voltage was " + batt_voltage + "\n");
-//                    send_battery_intent();
-                } else {
-                    System.out.print("ERROR: incorrect gecko reading flag\n");
-                    System.out.print("ERROR: got gecko reading that did not have correct type flag, flag was " + data[data.length - 1] + "\n");
-                }
-
-                //** CLOCKWISE = higher voltage, counterclockwise = lower voltage
-
-                //where incrementing degrees takes you clockwise:
-                // 2.96V is about 405 degrees (really right on tbh)
-                //2.7V is 360 degrees
-                //1.5V is 180 degrees
-                //0.322V is 0 degrees
-                //0.037V is about -45 degrees
-
-            } else if (BGapi.isTemperatureResponse(data)) {
-                //parse and store somewhere (FirebaseService?)
-                int temp = data[data.length - 2];
-                FirebaseService.Companion.getServiceInstance().appendTemp(temp);
-            } else if ("message_system_boot".equals(BGapi.getResponseName(data))) {
-                //TODO: this is definitely just a bandaid for the real problem of the gecko rebooting
-                //the gecko mysteriously reset, so resend the setup and start commands
-                try {
-//                    write(TextUtil.fromHexString(BGapi.SCANNER_SET_MODE));
-//                    write(TextUtil.fromHexString(BGapi.SCANNER_SET_TIMING));
-//                    write(TextUtil.fromHexString(BGapi.CONNECTION_SET_PARAMETERS));
-                    write(TextUtil.fromHexString(BGapi.SCANNER_START));
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            } else if("message_rotate_ccw_rsp".equals(BGapi.getResponseName(data))) {
-                if (lastCommand == null || !lastCommand.equals(BGapi.ROTATE_CCW)) {
-                    if (lastEventTime < 0) {
-                        lastEventTime = System.currentTimeMillis();
-                        System.out.print("ERROR: unexpected " + BGapi.getResponseName(data) +  " rsp received for the first time\n");
-                    } else {
-                        long timeElapsed = System.currentTimeMillis() - lastEventTime;
-                        lastEventTime = System.currentTimeMillis();
-                        System.out.print("ERROR: unexpected " + BGapi.getResponseName(data) +  " received after " + timeElapsed/1000 + " seconds\n");
-                    }
-                    write(TextUtil.fromHexString(BGapi.ROTATE_STOP));
-                }
-            }
-            else if (!BGapi.isKnownResponse(data)) {
-                //If the data isn't any kind of thing we can recognize, assume it's incomplete
-
-                //If there's already partial data waiting
-                if (pendingBytes != null) {
-                    //add this data to the end of it
-                    pendingBytes = appendByteArray(pendingBytes, data);
-
-                    //and try to parse it again
-                    BlePacket temp = BlePacket.parsePacket(pendingBytes);
-                    if (temp != null) {
-                        pendingPacket = temp;
-                        pendingBytes = null;
-                    }
-                }
-                //and it not, try to add it to the end of pending packet
-                else if (pendingPacket != null) {
-                    //todo: instead of just appending random data, check what it is (consider max possible length of packet)
-                    //we should never be appending data to an already finsihed packet
-                    pendingPacket.appendData(data);
+                
+                // Prevent buffer overflow
+                if (packetBuffer.length > MAX_PACKET_SIZE) {
+                    Log.w("SerialService", "Buffer overflow, clearing buffer");
+                    packetBuffer = new byte[0];
+                    pendingPacket = null;
+                    pendingBytes = null;
                 }
             }
 
-            //original content of method
+            // Forward to UI listener (original logic)
             synchronized (this) {
                 if (uiFacingListener != null) {
                     mainLooper.post(() -> {
@@ -803,6 +808,339 @@ public class SerialService extends Service implements SerialListener {
     }
 
     /**
+     * Process the next complete packet from the buffer
+     * @return true if a packet was processed, false if no complete packet available
+     */
+    private boolean processNextPacket() {
+        if (packetBuffer.length < MIN_PACKET_SIZE) {
+            return false; // Not enough data for even a minimal packet
+        }
+
+        // Check for angle/battery response
+        int angleBattPatternStart = findAngleBatteryPattern(packetBuffer);
+        if (angleBattPatternStart >= 0) {
+            return processAngleBatteryResponseWithPattern(angleBattPatternStart);
+        }
+
+        // Check for temperature response
+        if (BGapi.isTemperatureResponse(packetBuffer)) {
+            return processTemperatureResponse();
+        }
+
+        // Check for scan report event (BLE packet) using pattern matching
+        int patternStart = findPacketPattern(packetBuffer);
+        if (patternStart >= 0) {
+            return processBlePacketWithPattern(patternStart);
+        }
+//        else {
+//            // Debug: Print buffer info when pattern is not found
+//            String debugInfo = "Packet pattern not found - Buffer size: " + packetBuffer.length +
+//                             ", First 16 bytes: " + bytesToHex(Arrays.copyOfRange(packetBuffer, 0, Math.min(16, packetBuffer.length)));
+//            print_to_terminal(debugInfo);
+//        }
+        
+
+        
+        // Check for known responses
+        if (BGapi.isKnownResponse(packetBuffer)) {
+            return processKnownResponse();
+        }
+        
+        // If we can't identify the packet type, try to find a known response pattern
+        return findAndProcessKnownPattern();
+    }
+
+    /**
+     * Find the packet pattern in the buffer
+     * @param buffer The buffer to search in
+     * @return The starting position of the pattern, or -1 if not found
+     */
+    private int findPacketPattern(byte[] buffer) {
+        // Pattern to search for: 02 01 04 05 04 08 42 59 55 F8
+        byte[] pattern = {(byte) 0x02, (byte) 0x01, (byte) 0x04, (byte) 0x05, 
+                         (byte) 0x04, (byte) 0x08, (byte) 0x42, (byte) 0x59, 
+                         (byte) 0x55, (byte) 0xF8};
+        
+        for (int i = 0; i <= buffer.length - pattern.length; i++) {
+            boolean found = true;
+            for (int j = 0; j < pattern.length; j++) {
+                if (buffer[i + j] != pattern[j]) {
+                    found = false;
+                    break;
+                }
+            }
+            if (found) {
+                print_to_terminal("Pattern found at position " + i + " in buffer of size " + buffer.length);
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Find the angle/battery response pattern in the buffer
+     * @param buffer The buffer to search in
+     * @return The starting position of the pattern, or -1 if not found
+     */
+    private int findAngleBatteryPattern(byte[] buffer) {
+        // Pattern to search for: A0 04 FF 00 03
+        byte[] pattern = {(byte) 0xA0, (byte) 0x04, (byte) 0xFF, (byte) 0x00, (byte) 0x03};
+        
+        for (int i = 0; i <= buffer.length - pattern.length; i++) {
+            boolean found = true;
+            for (int j = 0; j < pattern.length; j++) {
+                if (buffer[i + j] != pattern[j]) {
+                    found = false;
+                    break;
+                }
+            }
+            if (found) {
+//                print_to_terminal("Angle/Battery pattern found at position " + i + " in buffer of size " + buffer.length);
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Process BLE packet using pattern-based detection
+     * @param patternStart The starting position of the pattern
+     * @return true if packet was processed, false if incomplete
+     */
+    private boolean processBlePacketWithPattern(int patternStart) {
+        int packetStart = patternStart - 22;
+        int packetEnd = patternStart + 252;
+        
+        // Check if we have enough data for the complete packet
+        if (packetStart < 0 || packetEnd > packetBuffer.length) {
+            print_to_terminal("Incomplete packet - need positions " + packetStart + " to " + packetEnd + 
+                            ", have buffer size " + packetBuffer.length);
+            return false; // Keep in buffer, need more data
+        }
+        
+        // Extract the complete packet
+        byte[] packetData = Arrays.copyOfRange(packetBuffer, packetStart, packetEnd);
+        
+        // Debug: Show the extracted packet data
+        print_to_terminal("Extracted packet - Pattern at " + patternStart + 
+                         ", Packet range: " + packetStart + " to " + packetEnd + 
+                         ", Packet: " + bytesToHex(Arrays.copyOfRange(packetData, 0, packetData.length)));
+        
+        // Try to parse as BLE packet
+        BlePacket packet = BlePacket.parsePacket(packetData);
+        if (packet != null && !packet.isComplete()) {
+            print_to_terminal("packet incomplete, packet length = " + packet);
+        }
+        if (packet != null && packet.isComplete()) {
+            print_to_terminal("Packet appeared to parse successfully");
+            // Complete packet found - queue Firebase operation
+            final BlePacket finalPacket = packet;
+            queueForProcessing(() -> {
+                FirebaseService.Companion.getServiceInstance().appendFile(finalPacket.toCSV());
+            });
+            
+            // Remove the processed packet from buffer
+            removeFromBuffer(packetEnd);
+            print_to_terminal("BLE packet processed successfully - Pattern at " + patternStart +
+                            ", Packet size: " + packetData.length + " bytes");
+            return true;
+        } else if (packet != null) {
+            // Partial packet - keep it in buffer
+            pendingPacket = packet;
+            print_to_terminal("Partial BLE packet - waiting for more data");
+            return false;
+        } else {
+            // Can't parse - might be incomplete, keep in buffer
+            pendingBytes = packetData.clone();
+            print_to_terminal("BLE packet parse failed - keeping in buffer");
+            return false;
+        }
+    }
+
+    /**
+     * Process angle/battery response using pattern-based detection
+     * @param patternStart The starting position of the pattern
+     * @return true if packet was processed, false if incomplete
+     */
+    private boolean processAngleBatteryResponseWithPattern(int patternStart) {
+        // Extract 8-byte sequence starting at pattern position
+        int packetStart = patternStart;
+        int packetEnd = patternStart + 8;
+        
+        // Check if we have enough data for the complete packet
+        if (packetEnd > packetBuffer.length) {
+            print_to_terminal("Incomplete angle/battery packet - need positions " + packetStart + " to " + packetEnd + 
+                            ", have buffer size " + packetBuffer.length);
+            return false; // Keep in buffer, need more data
+        }
+        
+        // Extract the complete packet
+        byte[] packetData = Arrays.copyOfRange(packetBuffer, packetStart, packetEnd);
+        
+        // Debug: Show the extracted packet data
+        //        print_to_terminal("Extracted angle/battery packet - Pattern at " + patternStart +
+        //                         ", Packet range: " + packetStart + " to " + packetEnd +
+        //                         ", Full packet: " + bytesToHex(packetData));
+        
+        // Process the angle/battery data
+        processAngleBatteryData(packetData);
+        
+        // Remove only the specific 8-byte packet from buffer
+        removeSpecificRangeFromBuffer(packetStart, packetEnd);
+        //        print_to_terminal("Angle/Battery packet processed successfully - Pattern at " + patternStart +
+        //                         ", Packet size: " + packetData.length + " bytes");
+        return true;
+    }
+
+    private boolean processAngleBatteryResponse() {
+        // Angle/battery responses should be complete
+        if (packetBuffer.length >= 15) { // Minimum size for angle/battery response
+            processAngleBatteryData(packetBuffer);
+            removeFromBuffer(packetBuffer.length);
+            print_to_terminal("Angle/Battery packet processed - Size: " + packetBuffer.length);
+            return true;
+        }
+        print_to_terminal("Angle/Battery packet too small - Size: " + packetBuffer.length + " (need >= 15)");
+        return false; // Keep in buffer if incomplete
+    }
+
+    private boolean processTemperatureResponse() {
+        // Temperature responses should be complete
+        if (packetBuffer.length >= 9) {
+            final int temp = packetBuffer[packetBuffer.length - 2];
+            queueForProcessing(() -> {
+                FirebaseService.Companion.getServiceInstance().appendTemp(temp);
+            });
+            removeFromBuffer(packetBuffer.length);
+            print_to_terminal("Temperature packet processed - Size: " + packetBuffer.length + ", Temp: " + temp);
+            return true;
+        }
+        print_to_terminal("Temperature packet too small - Size: " + packetBuffer.length + " (need >= 9)");
+        return false;
+    }
+
+    private boolean processKnownResponse() {
+        // Known responses should be complete
+        String responseName = BGapi.getResponseName(packetBuffer);
+        if (responseName != null) {
+            handleKnownResponse(responseName);
+            removeFromBuffer(packetBuffer.length);
+            return true;
+        }
+        return false;
+    }
+
+    private boolean findAndProcessKnownPattern() {
+        // Look for known response patterns within the buffer
+        // For now, we'll keep the original logic for unknown data
+        // This could be enhanced later to search for known patterns
+        
+        // Debug: Print comprehensive buffer info when no packet type is recognized
+        String debugInfo = "No packet type recognized - Buffer size: " + packetBuffer.length + 
+                          ", Full buffer: " + bytesToHex(packetBuffer);
+        print_to_terminal(debugInfo);
+        
+        return false; // Keep in buffer if we can't identify it
+    }
+
+    private void processAngleBatteryData(byte[] data) {
+        if (data[data.length - 1] == (byte) 0xFF) {
+            // Angle data
+            byte[] lastTwoBytes = new byte[2];
+            System.arraycopy(data, data.length - 3, lastTwoBytes, 0, 2);
+            
+            int pot_bits = ((lastTwoBytes[0] & 0xFF) << 4) | ((lastTwoBytes[1] & 0xF0) >>> 4);
+            float pot_voltage = (float) (pot_bits * 0.002);
+            potAngle = (float) (((pot_voltage - 0.332) / (2.7 - 0.332)) * 360);
+            
+            Boolean isMoving = angleMeasSeries.addMeasurementFiltered(potAngle);
+            if (isMoving && !shouldbeMoving) {
+                try {
+                    write(TextUtil.fromHexString(BGapi.ROTATE_STOP));
+                    System.out.println("Stopped Erroneous Rotation");
+                } catch (IOException e) {
+                    Log.e("SerialService", "Error stopping motor", e);
+                }
+            }
+            
+            lastHeadingTime = LocalDateTime.now();
+            send_heading_intent();
+            
+        } else if (data[data.length - 1] == (byte) 0xF0) {
+            // Battery data
+            byte[] lastTwoBytes = new byte[2];
+            System.arraycopy(data, data.length - 3, lastTwoBytes, 0, 2);
+            
+            int batt_bits = ((lastTwoBytes[0] & 0xFF) << 4) | ((lastTwoBytes[1] & 0xF0) >>> 4);
+            float batt_voltage = ((float) (batt_bits * 0.002)) * 6;
+            
+            lastBatteryVoltage = batt_voltage;
+            System.out.print("Battery voltage was " + batt_voltage + "\n");
+        } else {
+            Log.w("SerialService", "Unknown angle/battery response flag: " + data[data.length - 1]);
+        }
+    }
+
+    private void handleKnownResponse(String responseName) {
+        if ("message_system_boot".equals(responseName)) {
+            try {
+                write(TextUtil.fromHexString(BGapi.SCANNER_START));
+            } catch (Exception e) {
+                Log.e("SerialService", "Error restarting scanner", e);
+            }
+        } else if ("message_rotate_ccw_rsp".equals(responseName)) {
+            if (lastCommand == null || !lastCommand.equals(BGapi.ROTATE_CCW)) {
+                if (lastEventTime < 0) {
+                    lastEventTime = System.currentTimeMillis();
+                    Log.w("SerialService", "Unexpected " + responseName + " received for the first time");
+                } else {
+                    long timeElapsed = System.currentTimeMillis() - lastEventTime;
+                    lastEventTime = System.currentTimeMillis();
+                    Log.w("SerialService", "Unexpected " + responseName + " received after " + timeElapsed/1000 + " seconds");
+                }
+                try {
+                    write(TextUtil.fromHexString(BGapi.ROTATE_STOP));
+                } catch (IOException e) {
+                    Log.e("SerialService", "Error stopping motor", e);
+                }
+            }
+        }
+    }
+
+    private void removeFromBuffer(int length) {
+        if (length >= packetBuffer.length) {
+            packetBuffer = new byte[0];
+        } else {
+            packetBuffer = Arrays.copyOfRange(packetBuffer, length, packetBuffer.length);
+        }
+    }
+
+    /**
+     * Remove a specific range of bytes from the buffer
+     * @param start Start position (inclusive)
+     * @param end End position (exclusive)
+     */
+    private void removeSpecificRangeFromBuffer(int start, int end) {
+        if (start < 0 || end > packetBuffer.length || start >= end) {
+            print_to_terminal("Invalid range for buffer removal: " + start + " to " + end + " (buffer size: " + packetBuffer.length + ")");
+            return;
+        }
+        
+        // Create new buffer with the range removed
+        byte[] newBuffer = new byte[packetBuffer.length - (end - start)];
+        
+        // Copy bytes before the range
+        System.arraycopy(packetBuffer, 0, newBuffer, 0, start);
+        
+        // Copy bytes after the range
+        System.arraycopy(packetBuffer, end, newBuffer, start, packetBuffer.length - end);
+        
+        packetBuffer = newBuffer;
+        
+        print_to_terminal("Removed bytes " + start + " to " + end + " from buffer. New size: " + packetBuffer.length);
+    }
+
+    /**
      * Given two byte arrays a,b, returns a new byte array that has appended b to the end of a
      **/
     private byte[] appendByteArray(byte[] a, byte[] b) {
@@ -810,6 +1148,17 @@ public class SerialService extends Service implements SerialListener {
         System.arraycopy(a, 0, temp, 0, a.length);
         System.arraycopy(b, 0, temp, a.length, b.length);
         return temp;
+    }
+
+    /**
+     * Convert byte array to hex string for debugging
+     */
+    private String bytesToHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) {
+            sb.append(String.format("%02X ", b));
+        }
+        return sb.toString().trim();
     }
 
     public void onSerialIoError(Exception e) {
@@ -860,6 +1209,31 @@ public class SerialService extends Service implements SerialListener {
                     }
                 } else if (intent.getAction().equals(KEY_HEADING_MIN_AS_MAX_ACTION)) {
                     treatHeadingMinAsMax = !intent.getBooleanExtra(KEY_HEADING_MIN_AS_MAX_STATE, false);
+                }
+            }
+        }
+    }
+
+    /**
+     * Queue an operation for ordered processing
+     */
+    private void queueForProcessing(Runnable operation) {
+        synchronized (processingLock) {
+            processingQueue.offer(operation);
+        }
+        // Process the queue on the main thread to ensure ordering
+        mainLooper.post(this::processQueuedOperations);
+    }
+
+    /**
+     * Process all queued operations in order
+     */
+    private void processQueuedOperations() {
+        synchronized (processingLock) {
+            while (!processingQueue.isEmpty()) {
+                Runnable operation = processingQueue.poll();
+                if (operation != null) {
+                    operation.run();
                 }
             }
         }

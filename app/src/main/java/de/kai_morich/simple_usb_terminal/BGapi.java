@@ -28,7 +28,7 @@ public class BGapi {
         knownResponses.put("message_rotate_cw_rsp", new byte[]{0x20, 0x04, (byte) 0xFF, 0x00, 0x00, 0x00, 0x01, 0x03});
         knownResponses.put("message_rotate_ccw_rsp", new byte[]{0x20, 0x04, (byte) 0xFF, 0x00, 0x00, 0x00, 0x01, 0x04});
         knownResponses.put("message_rotate_stop_rsp", new byte[]{0x20, 0x04, (byte) 0xFF, 0x00, 0x00, 0x00, 0x01, 0x05});
-        knownResponses.put("message_read_angle_rsp", new byte[]{0x20, 0x04, (byte) 0xFF, 0x00, 0x00, 0x00, 0x01, 0x06});
+        knownResponses.put("message_read_angle_rsp", new byte[]{(byte) 0xA0, 0x04, (byte) 0xFF, 0x00, 0x03});
         knownResponses.put("message_user_to_target_rsp", new byte[]{0x20, 0x03, (byte) 0xFF, 0x00, 0x01, 0x00, 0x00});
         //knownResponses.put("message_related_rsp???", new byte[]{0x20, 0x03, (byte) 0xFF, 0x00, 0x01, 0x00, 0x00});
         knownResponses.put("message_system_boot", new byte[]{(byte) 0xA0, 0x12, 0x01, 0x00, 0x03, 0x00, 0x03, 0x00, 0x02, 0x00,
@@ -130,5 +130,9 @@ public class BGapi {
             }
         }
         return false;
+    }
+
+    public static Map<String, byte[]> getKnownResponses() {
+        return new HashMap<>(knownResponses);
     }
 }

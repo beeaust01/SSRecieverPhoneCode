@@ -98,20 +98,20 @@ public class BlePacket {
 //            return null;
 //        }
         String addr = "";
-        for(int i = 18; i > 12; i--){ //extended BLE UUID
+        for(int i = 10; i > 4; i--){ //extended BLE UUID
         //for(int i = 9; i > 4; i--){ //Legacy BLE way
         //for(int i = 0; i < 40; i++){//testing
             addr += String.format("%02X", bytes[i]) + ":";
         }
         addr = addr.substring(0, addr.length() - 1);
         byte packet_type = 0;
-        byte rssi = bytes[25]; //17 for legacy BLE
-        byte channel = bytes[26]; //18 for legacy BLE
+        byte rssi = bytes[17]; //17 for legacy BLE
+        byte channel = bytes[18]; //18 for legacy BLE
 
         //byte[] data = Arrays.copyOfRange(bytes, 41, 284); //31 to byte.len for legacy BLE
         //int dataStart =0; //for troubleshooting
-        int dataStart =39;
-        int dataEnd = Math.min(bytes.length, 288);  // Never go past byte 287
+        int dataStart =32;
+        int dataEnd = Math.min(bytes.length, 273);  // Never go past byte 287
         byte[] data = Arrays.copyOfRange(bytes, dataStart, dataEnd);
 
         return new BlePacket(addr, rssi, channel, packet_type, data);
@@ -135,7 +135,7 @@ public class BlePacket {
     public boolean isComplete() {
         if(data == null)
             return false;
-        return data.length >= 568;
+        return data.length >= 252;
     }
 
 

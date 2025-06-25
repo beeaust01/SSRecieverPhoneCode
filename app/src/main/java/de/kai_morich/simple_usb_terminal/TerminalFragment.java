@@ -519,8 +519,30 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         } else if (id == R.id.getAngle) {
             send(BGapi.GET_ANGLE);
             return true;
-        }
-        else if (id == R.id.editRotate) {
+        } else if (id == R.id.showLogPath) {
+            if (service != null) {
+                String logPath = service.getLogFilePath();
+                if (logPath != null) {
+                    Toast.makeText(getContext(), "Log file: " + logPath, Toast.LENGTH_LONG).show();
+                    status("Log file path: " + logPath);
+                } else {
+                    Toast.makeText(getContext(), "Log file path not available", Toast.LENGTH_SHORT).show();
+                }
+            }
+            return true;
+        } else if (id == R.id.clearLog) {
+            if (service != null) {
+                service.clearLogFile();
+                Toast.makeText(getContext(), "Log file cleared", Toast.LENGTH_SHORT).show();
+            }
+            return true;
+        } else if (id == R.id.debugBuffer) {
+            if (service != null) {
+                service.debugBufferContents();
+                Toast.makeText(getContext(), "Buffer debug info printed to terminal", Toast.LENGTH_SHORT).show();
+            }
+            return true;
+        } else if (id == R.id.editRotate) {
             //TODO actually change the period in SerialService
             AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
             builder.setTitle("New Rotation Period UNUSED");
