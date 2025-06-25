@@ -932,7 +932,7 @@ public class SerialService extends Service implements SerialListener {
             print_to_terminal("packet incomplete, packet length = " + packet.getDataLen());
         }
         if (packet != null && packet.isComplete()) {
-            print_to_terminal("Packet appeared to parse successfully");
+//            print_to_terminal("Packet appeared to parse successfully");
             // Complete packet found - queue Firebase operation
             final BlePacket finalPacket = packet;
             queueForProcessing(() -> {
@@ -1021,11 +1021,24 @@ public class SerialService extends Service implements SerialListener {
 
     private boolean processKnownResponse() {
         // Known responses should be complete
-        String responseName = BGapi.getResponseName(packetBuffer);
-        if (responseName != null) {
-            handleKnownResponse(responseName);
-            removeFromBuffer(packetBuffer.length);
-            return true;
+        Object[] result = BGapi.getResponseNameAndPosition(packetBuffer);
+        if (result != null) {
+            String responseName = (String) result[0];
+            int position = (Integer) result[1];
+            byte[] responsePattern = BGapi.getKnownResponses().get(responseName);
+            
+            if (responsePattern != null) {
+                // Extract the specific response pattern from the buffer
+                int responseStart = position;
+                int responseEnd = position + responsePattern.length;
+                
+                // Remove only the specific response from buffer
+                removeSpecificRangeFromBuffer(responseStart, responseEnd);
+                
+                handleKnownResponse(responseName);
+                print_to_terminal("Known response processed: " + responseName + " at position " + position);
+                return true;
+            }
         }
         return false;
     }

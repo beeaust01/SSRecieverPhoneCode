@@ -90,16 +90,54 @@ public class BGapi {
 
     public static boolean isKnownResponse(byte[] bytes) {
         for (byte[] response : knownResponses.values()) {
-            if (Arrays.equals(response, bytes))
+            if (findPatternInBytes(bytes, response) >= 0) {
                 return true;
+            }
         }
         return false;
     }
 
+    /**
+     * Find a pattern within a byte array
+     * @param buffer The buffer to search in
+     * @param pattern The pattern to search for
+     * @return The starting position of the pattern, or -1 if not found
+     */
+    private static int findPatternInBytes(byte[] buffer, byte[] pattern) {
+        for (int i = 0; i <= buffer.length - pattern.length; i++) {
+            boolean found = true;
+            for (int j = 0; j < pattern.length; j++) {
+                if (buffer[i + j] != pattern[j]) {
+                    found = false;
+                    break;
+                }
+            }
+            if (found) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     public static String getResponseName(byte[] bytes) {
         for (Map.Entry<String, byte[]> entry : knownResponses.entrySet()) {
-            if (Arrays.equals(entry.getValue(), bytes)) {
+            if (findPatternInBytes(bytes, entry.getValue()) >= 0) {
                 return entry.getKey();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Get the response name and position where it was found
+     * @param bytes The byte array to search in
+     * @return An array containing [responseName, position] or null if not found
+     */
+    public static Object[] getResponseNameAndPosition(byte[] bytes) {
+        for (Map.Entry<String, byte[]> entry : knownResponses.entrySet()) {
+            int position = findPatternInBytes(bytes, entry.getValue());
+            if (position >= 0) {
+                return new Object[]{entry.getKey(), position};
             }
         }
         return null;
