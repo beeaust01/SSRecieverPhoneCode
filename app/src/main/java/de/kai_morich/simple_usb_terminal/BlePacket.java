@@ -135,9 +135,15 @@ public class BlePacket {
     public boolean isComplete() {
         if(data == null)
             return false;
-        return data.length >= 252;
+        return data.length >= 241;
     }
 
+    public int getDataLen() {
+        if (data == null) {
+            return 0;
+        }
+        return data.length;
+    }
 
 
     /**

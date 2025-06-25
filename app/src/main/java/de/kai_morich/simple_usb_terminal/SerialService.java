@@ -929,7 +929,7 @@ public class SerialService extends Service implements SerialListener {
         // Try to parse as BLE packet
         BlePacket packet = BlePacket.parsePacket(packetData);
         if (packet != null && !packet.isComplete()) {
-            print_to_terminal("packet incomplete, packet length = " + packet);
+            print_to_terminal("packet incomplete, packet length = " + packet.getDataLen());
         }
         if (packet != null && packet.isComplete()) {
             print_to_terminal("Packet appeared to parse successfully");
