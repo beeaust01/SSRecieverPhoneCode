@@ -154,6 +154,8 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
     public static final String GENERAL_PURPOSE_PRINT = "TerminalFragment.GENERAL_PURPOSE_PRINT";
 
     public static final String GENERAL_PURPOSE_STRING = "TerminalFragment.GENERAL_PURPOSE_STRING";
+    public static final String GENERAL_PURPOSE_PRINT_COLORED = "TerminalFragment.GENERAL_PURPOSE_PRINT_COLORED";
+    public static final String GENERAL_PURPOSE_COLOR = "TerminalFragment.GENERAL_PURPOSE_COLOR";
 
     private LocalBroadcastManager bManager;
 
@@ -161,6 +163,7 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         @Override
         public void onReceive(Context context, Intent intent) {
             String s = null;
+            Integer color = null;
 //            System.out.println(intent.getAction());
             if (intent.getAction().equals(RECEIVE_HEADING_STATE)){
                 String state = intent.getStringExtra(RECEIVE_ROTATION_STATE);
@@ -179,9 +182,22 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
                 s = intent.getExtras().getString(GENERAL_PURPOSE_STRING);
                 System.out.println(s);
             }
+            else if (intent.getAction().equals(GENERAL_PURPOSE_PRINT_COLORED)) {
+                s = intent.getExtras().getString(GENERAL_PURPOSE_STRING);
+                color = intent.getExtras().getInt(GENERAL_PURPOSE_COLOR);
+                System.out.println(s);
+            }
 
             if(receiveText != null && s != null){
-                receiveText.append(s+"\n");
+                if (color != null) {
+                    // Apply color formatting
+                    SpannableStringBuilder spn = new SpannableStringBuilder(s + "\n");
+                    spn.setSpan(new ForegroundColorSpan(color), 0, spn.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    receiveText.append(spn);
+                } else {
+                    // Default formatting
+                    receiveText.append(s + "\n");
+                }
             }
         }
     };
@@ -206,6 +222,7 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         IntentFilter filter = new IntentFilter();
         filter.addAction(RECEIVE_HEADING_STATE);
         filter.addAction(GENERAL_PURPOSE_PRINT);
+        filter.addAction(GENERAL_PURPOSE_PRINT_COLORED);
         bManager.registerReceiver(terminalReceiver, filter);
     }
 
@@ -482,6 +499,9 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
     public void onCreateOptionsMenu(@NonNull Menu menu, MenuInflater inflater) {
         inflater.inflate(R.menu.menu_terminal, menu);
         menu.findItem(R.id.truncate).setChecked(truncate);
+        if (service != null) {
+            menu.findItem(R.id.detailedPacketOutput).setChecked(service.isUseDetailedPacketOutput());
+        }
     }
 
     @Override
@@ -496,6 +516,16 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         } else if (id == R.id.truncate) {
             truncate = !truncate;
             item.setChecked(truncate);
+            return true;
+        } else if (id == R.id.detailedPacketOutput) {
+            if (service != null) {
+                boolean newState = !service.isUseDetailedPacketOutput();
+                service.setUseDetailedPacketOutput(newState);
+                item.setChecked(newState);
+                String status = newState ? "Detailed" : "Simplified";
+                Toast.makeText(getContext(), "Packet output: " + status, Toast.LENGTH_SHORT).show();
+                status("Packet output format: " + status);
+            }
             return true;
         } else if (id == R.id.manualCW) {
             send(BGapi.ROTATE_CW);
@@ -540,6 +570,12 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
             if (service != null) {
                 service.debugBufferContents();
                 Toast.makeText(getContext(), "Buffer debug info printed to terminal", Toast.LENGTH_SHORT).show();
+            }
+            return true;
+        } else if (id == R.id.showStats) {
+            if (service != null) {
+                service.displayPacketStatistics();
+                Toast.makeText(getContext(), "Packet statistics printed to terminal", Toast.LENGTH_SHORT).show();
             }
             return true;
         } else if (id == R.id.editRotate) {
@@ -679,25 +715,25 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
 //        span.setSpan(new ForegroundColorSpan(Color.CYAN), 0, span.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
 //        receiveText.append(span);
         if (BGapi.isScanReportEvent(data)) {
-            //original script recorded time, addr, rssi, channel, and data
-            //TODO: Non-UI logic - should not be in UI class
-            if (pendingPacket != null) {
-                String msg = pendingPacket.toString();
-                if (truncate) {
-                    int length = msg.length();
-                    if (length > msg.lastIndexOf('\n') + 40) {
-                        length = msg.lastIndexOf('\n') + 40;
-                    }
-                    msg = msg.substring(0, length) + "…";
-                }
-                SpannableStringBuilder spn = new SpannableStringBuilder(msg + "\n\n");
-                spn.setSpan(new ForegroundColorSpan(Color.MAGENTA), 0, spn.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-                receiveText.append(spn);
-            }
-            if (data.length <= 21)
-                return;
-
-            pendingPacket = BlePacket.parsePacket(data);
+//            //original script recorded time, addr, rssi, channel, and data
+//            //TODO: Non-UI logic - should not be in UI class
+//            if (pendingPacket != null) {
+//                String msg = pendingPacket.toString();
+//                if (truncate) {
+//                    int length = msg.length();
+//                    if (length > msg.lastIndexOf('\n') + 40) {
+//                        length = msg.lastIndexOf('\n') + 40;
+//                    }
+//                    msg = msg.substring(0, length) + "…";
+//                }
+//                SpannableStringBuilder spn = new SpannableStringBuilder(msg + "\n\n");
+//                spn.setSpan(new ForegroundColorSpan(Color.MAGENTA), 0, spn.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+//                receiveText.append(spn);
+//            }
+//            if (data.length <= 21)
+//                return;
+//
+//            pendingPacket = BlePacket.parsePacket(data);
         } else if (BGapi.isAngleOrBattResponse(data)) {
 //            byte[] lastTwoBytes = new byte[2];
 ////             Extract the last 2 bytes

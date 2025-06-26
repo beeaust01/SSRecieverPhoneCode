@@ -8,6 +8,7 @@ import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Color;
 import android.os.BatteryManager;
 import android.os.Binder;
 import android.os.Build;
@@ -146,6 +147,18 @@ public class SerialService extends Service implements SerialListener {
     // Processing queue for ordered operations
     private final Queue<Runnable> processingQueue = new LinkedList<>();
     private final Object processingLock = new Object();
+    
+    // Packet counters
+    private int blePacketsProcessed = 0;
+    private int angleBatteryPacketsProcessed = 0;
+    private int temperaturePacketsProcessed = 0;
+    private int knownResponsesProcessed = 0;
+    
+    // Truncation control
+    private boolean truncate = true;
+    
+    // Packet output format control
+    private boolean useDetailedPacketOutput = false;
 
     public static SerialService getInstance() {
         return instance;
@@ -160,6 +173,23 @@ public class SerialService extends Service implements SerialListener {
     }
 
     /**
+     * Get packet processing statistics
+     */
+    public int getBlePacketsProcessed() { return blePacketsProcessed; }
+    public int getAngleBatteryPacketsProcessed() { return angleBatteryPacketsProcessed; }
+    public int getTemperaturePacketsProcessed() { return temperaturePacketsProcessed; }
+    public int getKnownResponsesProcessed() { return knownResponsesProcessed; }
+    public int getTotalPacketsProcessed() { 
+        return blePacketsProcessed + angleBatteryPacketsProcessed + temperaturePacketsProcessed + knownResponsesProcessed; 
+    }
+
+    /**
+     * Get/set packet output format control
+     */
+    public boolean isUseDetailedPacketOutput() { return useDetailedPacketOutput; }
+    public void setUseDetailedPacketOutput(boolean useDetailed) { useDetailedPacketOutput = useDetailed; }
+
+    /**
      * Creates an intent with the input string and passes it to Terminal Fragment, which then prints it
      *
      */
@@ -170,6 +200,20 @@ public class SerialService extends Service implements SerialListener {
         // Original terminal printing logic
         Intent intent = new Intent(TerminalFragment.GENERAL_PURPOSE_PRINT);
         intent.putExtra(TerminalFragment.GENERAL_PURPOSE_STRING, input);
+        LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(intent);
+    }
+
+    /**
+     * Creates an intent with the input string and color, passes it to Terminal Fragment for colored output
+     */
+    void print_to_terminal(String input, int color) {
+        // Write to log file
+        writeToLogFile(input);
+        
+        // Colored terminal printing logic
+        Intent intent = new Intent(TerminalFragment.GENERAL_PURPOSE_PRINT_COLORED);
+        intent.putExtra(TerminalFragment.GENERAL_PURPOSE_STRING, input);
+        intent.putExtra(TerminalFragment.GENERAL_PURPOSE_COLOR, color);
         LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(intent);
     }
 
@@ -245,8 +289,8 @@ public class SerialService extends Service implements SerialListener {
             int patternPos = findPacketPattern(packetBuffer);
             if (patternPos >= 0) {
                 print_to_terminal("BLE Pattern found at position: " + patternPos);
-                int packetStart = patternPos - 29;
-                int packetEnd = patternPos + 203;
+                int packetStart = patternPos - 22;
+                int packetEnd = patternPos + 252;
                 print_to_terminal("Would extract BLE packet from " + packetStart + " to " + packetEnd);
                 
                 if (packetStart >= 0 && packetEnd <= packetBuffer.length) {
@@ -277,6 +321,19 @@ public class SerialService extends Service implements SerialListener {
             
             print_to_terminal("=== END BUFFER DEBUG ===");
         }
+    }
+
+    /**
+     * Display packet processing statistics
+     */
+    public void displayPacketStatistics() {
+        print_to_terminal("=== PACKET STATISTICS ===");
+        print_to_terminal("BLE Packets: " + blePacketsProcessed);
+        print_to_terminal("Angle/Battery Packets: " + angleBatteryPacketsProcessed);
+        print_to_terminal("Temperature Packets: " + temperaturePacketsProcessed);
+        print_to_terminal("Known Responses: " + knownResponsesProcessed);
+        print_to_terminal("Total Packets: " + getTotalPacketsProcessed());
+        print_to_terminal("=== END STATISTICS ===");
     }
 
     void send_heading_intent() {
@@ -870,7 +927,7 @@ public class SerialService extends Service implements SerialListener {
                 }
             }
             if (found) {
-                print_to_terminal("Pattern found at position " + i + " in buffer of size " + buffer.length);
+//                print_to_terminal("Pattern found at position " + i + " in buffer of size " + buffer.length);
                 return i;
             }
         }
@@ -913,8 +970,8 @@ public class SerialService extends Service implements SerialListener {
         
         // Check if we have enough data for the complete packet
         if (packetStart < 0 || packetEnd > packetBuffer.length) {
-            print_to_terminal("Incomplete packet - need positions " + packetStart + " to " + packetEnd + 
-                            ", have buffer size " + packetBuffer.length);
+//            print_to_terminal("Incomplete packet - need positions " + packetStart + " to " + packetEnd +
+//                            ", have buffer size " + packetBuffer.length);
             return false; // Keep in buffer, need more data
         }
         
@@ -922,14 +979,14 @@ public class SerialService extends Service implements SerialListener {
         byte[] packetData = Arrays.copyOfRange(packetBuffer, packetStart, packetEnd);
         
         // Debug: Show the extracted packet data
-        print_to_terminal("Extracted packet - Pattern at " + patternStart + 
-                         ", Packet range: " + packetStart + " to " + packetEnd + 
-                         ", Packet: " + bytesToHex(Arrays.copyOfRange(packetData, 0, packetData.length)));
+//        print_to_terminal("Extracted packet - Pattern at " + patternStart +
+//                         ", Packet range: " + packetStart + " to " + packetEnd +
+//                         ", Packet: " + bytesToHex(Arrays.copyOfRange(packetData, 0, packetData.length)));
         
         // Try to parse as BLE packet
         BlePacket packet = BlePacket.parsePacket(packetData);
         if (packet != null && !packet.isComplete()) {
-            print_to_terminal("packet incomplete, packet length = " + packet.getDataLen());
+//            print_to_terminal("packet incomplete, packet length = " + packet.getDataLen());
         }
         if (packet != null && packet.isComplete()) {
 //            print_to_terminal("Packet appeared to parse successfully");
@@ -941,18 +998,40 @@ public class SerialService extends Service implements SerialListener {
             
             // Remove the processed packet from buffer
             removeFromBuffer(packetEnd);
-            print_to_terminal("BLE packet processed successfully - Pattern at " + patternStart +
-                            ", Packet size: " + packetData.length + " bytes");
+            blePacketsProcessed++; // Increment counter
+            
+            // Choose output format based on setting
+            String packetString;
+            if (useDetailedPacketOutput) {
+                // Truncate packet data for display like the old system
+                packetString = packet.toString();
+                if (truncate) {
+                    int length = packetString.length();
+                    int lastNewline = packetString.lastIndexOf('\n');
+                    if (lastNewline >= 0 && length > lastNewline + 40) {
+                        length = lastNewline + 40;
+                    }
+                    packetString = packetString.substring(0, length) + "…";
+                }
+            } else {
+                // Use simplified format
+                packetString = packet.toSimpleString();
+            }
+            
+            print_to_terminal(packetString, Color.MAGENTA);
+//            print_to_terminal("BLE packet processed successfully - Pattern at " + patternStart +
+//                            ", Packet size: " + packetData.length + " bytes" +
+//                            ", Total BLE packets: " + blePacketsProcessed);
             return true;
         } else if (packet != null) {
             // Partial packet - keep it in buffer
             pendingPacket = packet;
-            print_to_terminal("Partial BLE packet - waiting for more data");
+//            print_to_terminal("Partial BLE packet - waiting for more data");
             return false;
         } else {
             // Can't parse - might be incomplete, keep in buffer
             pendingBytes = packetData.clone();
-            print_to_terminal("BLE packet parse failed - keeping in buffer");
+//            print_to_terminal("BLE packet parse failed - keeping in buffer");
             return false;
         }
     }
@@ -969,8 +1048,8 @@ public class SerialService extends Service implements SerialListener {
         
         // Check if we have enough data for the complete packet
         if (packetEnd > packetBuffer.length) {
-            print_to_terminal("Incomplete angle/battery packet - need positions " + packetStart + " to " + packetEnd + 
-                            ", have buffer size " + packetBuffer.length);
+//            print_to_terminal("Incomplete angle/battery packet - need positions " + packetStart + " to " + packetEnd +
+//                            ", have buffer size " + packetBuffer.length);
             return false; // Keep in buffer, need more data
         }
         
@@ -987,8 +1066,10 @@ public class SerialService extends Service implements SerialListener {
         
         // Remove only the specific 8-byte packet from buffer
         removeSpecificRangeFromBuffer(packetStart, packetEnd);
+        angleBatteryPacketsProcessed++; // Increment counter
         //        print_to_terminal("Angle/Battery packet processed successfully - Pattern at " + patternStart +
         //                         ", Packet size: " + packetData.length + " bytes");
+//        print_to_terminal("Angle/Battery packet processed - Total: " + angleBatteryPacketsProcessed);
         return true;
     }
 
@@ -997,10 +1078,10 @@ public class SerialService extends Service implements SerialListener {
         if (packetBuffer.length >= 15) { // Minimum size for angle/battery response
             processAngleBatteryData(packetBuffer);
             removeFromBuffer(packetBuffer.length);
-            print_to_terminal("Angle/Battery packet processed - Size: " + packetBuffer.length);
+//            print_to_terminal("Angle/Battery packet processed - Size: " + packetBuffer.length);
             return true;
         }
-        print_to_terminal("Angle/Battery packet too small - Size: " + packetBuffer.length + " (need >= 15)");
+//        print_to_terminal("Angle/Battery packet too small - Size: " + packetBuffer.length + " (need >= 15)");
         return false; // Keep in buffer if incomplete
     }
 
@@ -1012,10 +1093,11 @@ public class SerialService extends Service implements SerialListener {
                 FirebaseService.Companion.getServiceInstance().appendTemp(temp);
             });
             removeFromBuffer(packetBuffer.length);
-            print_to_terminal("Temperature packet processed - Size: " + packetBuffer.length + ", Temp: " + temp);
+            temperaturePacketsProcessed++; // Increment counter
+            print_to_terminal("Temperature packet processed - Size: " + packetBuffer.length + ", Temp: " + temp + ", Total: " + temperaturePacketsProcessed);
             return true;
         }
-        print_to_terminal("Temperature packet too small - Size: " + packetBuffer.length + " (need >= 9)");
+//        print_to_terminal("Temperature packet too small - Size: " + packetBuffer.length + " (need >= 9)");
         return false;
     }
 
@@ -1036,7 +1118,8 @@ public class SerialService extends Service implements SerialListener {
                 removeSpecificRangeFromBuffer(responseStart, responseEnd);
                 
                 handleKnownResponse(responseName);
-                print_to_terminal("Known response processed: " + responseName + " at position " + position);
+                knownResponsesProcessed++; // Increment counter
+//                print_to_terminal("Known response processed: " + responseName + " at position " + position + ", Total: " + knownResponsesProcessed);
                 return true;
             }
         }
@@ -1049,9 +1132,9 @@ public class SerialService extends Service implements SerialListener {
         // This could be enhanced later to search for known patterns
         
         // Debug: Print comprehensive buffer info when no packet type is recognized
-        String debugInfo = "No packet type recognized - Buffer size: " + packetBuffer.length + 
-                          ", Full buffer: " + bytesToHex(packetBuffer);
-        print_to_terminal(debugInfo);
+//        String debugInfo = "No packet type recognized - Buffer size: " + packetBuffer.length +
+//                          ", Full buffer: " + bytesToHex(packetBuffer);
+//        print_to_terminal(debugInfo);
         
         return false; // Keep in buffer if we can't identify it
     }
@@ -1106,7 +1189,7 @@ public class SerialService extends Service implements SerialListener {
                 if (lastEventTime < 0) {
                     lastEventTime = System.currentTimeMillis();
                     Log.w("SerialService", "Unexpected " + responseName + " received for the first time");
-                } else {
+//                } else {
                     long timeElapsed = System.currentTimeMillis() - lastEventTime;
                     lastEventTime = System.currentTimeMillis();
                     Log.w("SerialService", "Unexpected " + responseName + " received after " + timeElapsed/1000 + " seconds");
@@ -1150,7 +1233,7 @@ public class SerialService extends Service implements SerialListener {
         
         packetBuffer = newBuffer;
         
-        print_to_terminal("Removed bytes " + start + " to " + end + " from buffer. New size: " + packetBuffer.length);
+//        print_to_terminal("Removed bytes " + start + " to " + end + " from buffer. New size: " + packetBuffer.length);
     }
 
     /**

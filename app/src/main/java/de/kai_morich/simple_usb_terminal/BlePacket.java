@@ -167,6 +167,19 @@ public class BlePacket {
                 + "\nData: " + TextUtil.toHexString(data);
     }
 
+    /**
+     * Returns a simplified version with just address, RSSI, and truncated data
+     * */
+    @NonNull
+    public String toSimpleString() {
+        String dataHex = TextUtil.toHexString(data);
+        // Truncate data to first 40 characters
+        if (dataHex.length() > 40) {
+            dataHex = dataHex.substring(0, 40) + "…";
+        }
+        return "Addr: " + addr + " | RSSI: " + rssi + " | Data: " + dataHex;
+    }
+
     @RequiresApi(api = Build.VERSION_CODES.O)
     public String toShortString(){
         return "Datetime: "+time.format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH:mm:ss"))
