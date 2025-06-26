@@ -35,6 +35,10 @@ public class BlePacket {
     private byte packet_type;
     private byte[] data;
 
+    // IMU data fields
+    private float[] accelerometerData;
+    private float[] magnetometerData;
+    private float[] gyroscopeData;
 
     /**
      * Constructor that grabs all necessary details about the current state of the device
@@ -62,6 +66,11 @@ public class BlePacket {
         this.channel = channel;
         this.packet_type = packet_type;
         this.data = data;
+
+        // Capture all IMU data
+        this.accelerometerData = SensorHelper.getAccelerometerReadingThreeDim().clone();
+        this.magnetometerData = SensorHelper.getMagnetometerReadingThreeDim().clone();
+        this.gyroscopeData = SensorHelper.getGyroscopeReadingThreeDim().clone();
     }
 
     /**
@@ -145,6 +154,26 @@ public class BlePacket {
         return data.length;
     }
 
+    /**
+     * Get accelerometer data (x, y, z)
+     */
+    public float[] getAccelerometerData() {
+        return accelerometerData.clone();
+    }
+
+    /**
+     * Get magnetometer data (x, y, z)
+     */
+    public float[] getMagnetometerData() {
+        return magnetometerData.clone();
+    }
+
+    /**
+     * Get gyroscope data (x, y, z)
+     */
+    public float[] getGyroscopeData() {
+        return gyroscopeData.clone();
+    }
 
     /**
      * Returns the contents of this packet in a human readable form
@@ -164,6 +193,9 @@ public class BlePacket {
                 + "\nRSSI: " + rssi
                 + "\nChannel: " + (channel & 0xFF /*'cast' to unsigned*/)
                 + "\nPacket Type: 0x" + String.format("%02X", packet_type)
+                + "\nAccelerometer (x,y,z): [" + String.format("%.3f, %.3f, %.3f", accelerometerData[0], accelerometerData[1], accelerometerData[2]) + "]"
+                + "\nMagnetometer (x,y,z): [" + String.format("%.3f, %.3f, %.3f", magnetometerData[0], magnetometerData[1], magnetometerData[2]) + "]"
+                + "\nGyroscope (x,y,z): [" + String.format("%.3f, %.3f, %.3f", gyroscopeData[0], gyroscopeData[1], gyroscopeData[2]) + "]"
                 + "\nData: " + TextUtil.toHexString(data);
     }
 
@@ -177,7 +209,11 @@ public class BlePacket {
         if (dataHex.length() > 40) {
             dataHex = dataHex.substring(0, 40) + "…";
         }
-        return "Addr: " + addr + " | RSSI: " + rssi + " | Data: " + dataHex;
+        return "Addr: " + addr + " | RSSI: " + rssi + 
+               " | Mag: [" + String.format("%.1f, %.1f, %.1f", magnetometerData[0], magnetometerData[1], magnetometerData[2]) + "]" +
+               " | Acc: [" + String.format("%.1f, %.1f, %.1f", accelerometerData[0], accelerometerData[1], accelerometerData[2]) + "]" +
+               " | Gyro: [" + String.format("%.1f, %.1f, %.1f", gyroscopeData[0], gyroscopeData[1], gyroscopeData[2]) + "]" +
+               " | Data: " + dataHex;
     }
 
     @RequiresApi(api = Build.VERSION_CODES.O)
@@ -203,6 +239,9 @@ public class BlePacket {
                 + "," + addr
                 + "," + rssi
                 + "," + (channel & 0xFF)
+                + "," + String.format("%.3f,%.3f,%.3f", accelerometerData[0], accelerometerData[1], accelerometerData[2])
+                + "," + String.format("%.3f,%.3f,%.3f", magnetometerData[0], magnetometerData[1], magnetometerData[2])
+                + "," + String.format("%.3f,%.3f,%.3f", gyroscopeData[0], gyroscopeData[1], gyroscopeData[2])
                 + "," + TextUtil.toHexString(data) + "\n";
     }
 

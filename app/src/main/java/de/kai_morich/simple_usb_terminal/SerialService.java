@@ -9,6 +9,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
+import android.location.Location;
 import android.os.BatteryManager;
 import android.os.Binder;
 import android.os.Build;
@@ -188,6 +189,45 @@ public class SerialService extends Service implements SerialListener {
      */
     public boolean isUseDetailedPacketOutput() { return useDetailedPacketOutput; }
     public void setUseDetailedPacketOutput(boolean useDetailed) { useDetailedPacketOutput = useDetailed; }
+
+    /**
+     * Check if currently connected to a device
+     */
+    public boolean isConnected() { return connected; }
+
+    /**
+     * Manually trigger a heading log entry for testing
+     */
+    public void triggerManualHeadingLog() {
+        // Get GPS coordinates
+        Location location = LocationBroadcastReceiver.Companion.getCurrentLocation();
+        double lat = location != null ? location.getLatitude() : 0.0;
+        double lon = location != null ? location.getLongitude() : 0.0;
+        
+        // Get IMU data
+        float[] accelData = SensorHelper.getAccelerometerReadingThreeDim();
+        float[] magData = SensorHelper.getMagnetometerReadingThreeDim();
+        float[] gyroData = SensorHelper.getGyroscopeReadingThreeDim();
+        
+        // Create proper CSV format without spaces
+        String headingStr = String.format("%s,%.3f,%.6f,%.6f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%s,%.3f,%s\n",
+                LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH:mm:ss")), // datetime
+                potAngle, // potentiometer angle
+                lat, // latitude
+                lon, // longitude
+                accelData[0], accelData[1], accelData[2], // accelerometer x,y,z
+                magData[0], magData[1], magData[2], // magnetometer x,y,z
+                gyroData[0], gyroData[1], gyroData[2], // gyroscope x,y,z
+                headingMin, // heading min
+                headingMax, // heading max
+                treatHeadingMinAsMax ? "true" : "false", // treat heading min as max
+                0.0, // old heading (not applicable for manual log)
+                "MANUAL_LOG" // rotation state
+        );
+
+        FirebaseService.Companion.getServiceInstance().appendHeading(headingStr);
+        print_to_terminal("Manual heading log entry created with GPS: " + lat + ", " + lon);
+    }
 
     /**
      * Creates an intent with the input string and passes it to Terminal Fragment, which then prints it
@@ -465,16 +505,30 @@ public class SerialService extends Service implements SerialListener {
                         lastHeadingTime = LocalDateTime.now();
                     }
 
-                    String headingStr = String.join(", ",
-                            lastHeadingTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH:mm:ss")),
-                            String.valueOf(currentHeading),
-                            Arrays.toString(SensorHelper.getMagnetometerReadingThreeDim()),
-                            String.valueOf(headingMin),
-                            String.valueOf(headingMax),
-                            String.valueOf(treatHeadingMinAsMax),
-                            String.valueOf(oldHeading),
-                            rotationState.toString(),
-                            "\n"
+                    // Get GPS coordinates
+                    Location location = LocationBroadcastReceiver.Companion.getCurrentLocation();
+                    double lat = location != null ? location.getLatitude() : 0.0;
+                    double lon = location != null ? location.getLongitude() : 0.0;
+                    
+                    // Get IMU data
+                    float[] accelData = SensorHelper.getAccelerometerReadingThreeDim();
+                    float[] magData = SensorHelper.getMagnetometerReadingThreeDim();
+                    float[] gyroData = SensorHelper.getGyroscopeReadingThreeDim();
+                    
+                    // Create proper CSV format without spaces
+                    String headingStr = String.format("%s,%.3f,%.6f,%.6f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%s,%.3f,%s\n",
+                            lastHeadingTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH:mm:ss")), // datetime
+                            currentHeading, // potentiometer angle
+                            lat, // latitude
+                            lon, // longitude
+                            accelData[0], accelData[1], accelData[2], // accelerometer x,y,z
+                            magData[0], magData[1], magData[2], // magnetometer x,y,z
+                            gyroData[0], gyroData[1], gyroData[2], // gyroscope x,y,z
+                            headingMin, // heading min
+                            headingMax, // heading max
+                            treatHeadingMinAsMax ? "true" : "false", // treat heading min as max
+                            oldHeading, // old heading
+                            rotationState.toString() // rotation state
                     );
 
                     FirebaseService.Companion.getServiceInstance().appendHeading(headingStr);

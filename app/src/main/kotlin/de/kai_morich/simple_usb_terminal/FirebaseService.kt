@@ -37,7 +37,7 @@ class FirebaseService : Service() {
     private var handler: Handler? = null
     private lateinit var timeoutRunnable: Runnable
     // How long, in ms, we should wait in between uploading the log
-    private val uploadDelay = 10.minutes.inWholeMilliseconds
+    private val uploadDelay = 5.minutes.inWholeMilliseconds
 
     private var logFw: FileWriter? = null
     private var logFile: File? = null
@@ -262,7 +262,7 @@ class FirebaseService : Service() {
             headingFile?.let { uploadFile(it, "headings") }
             headingFile = File(path, getDateTime() + "_headings.txt")
             headingFw = FileWriter(headingFile)
-            headingFw!!.write("datetime,headingCurrent,headingMin,headingMax,headingMinAsMax,headingOld\n")
+            headingFw!!.write("datetime,pot_angle,latitude,longitude,accel_x,accel_y,accel_z,mag_x,mag_y,mag_z,gyro_x,gyro_y,gyro_z,heading_min,heading_max,treat_min_as_max,old_heading,rotation_state\n")
         }
     }
 

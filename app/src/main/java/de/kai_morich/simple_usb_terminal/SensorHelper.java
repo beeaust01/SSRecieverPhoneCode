@@ -28,10 +28,9 @@ import androidx.annotation.RequiresApi;
 
 public class SensorHelper extends Service implements SensorEventListener {
 
-    float[] accelerometerReading = new float[3];
-
-
     static float[] magnetometerReading = new float[3];
+    static float[] gyroscopeReading = new float[3];
+    static float[] accelerometerReading = new float[3];
     //float[] potentiometerReading = new float[3];
     private static double heading = 0.0;
 
@@ -43,12 +42,17 @@ public class SensorHelper extends Service implements SensorEventListener {
         super.onCreate();
         SensorManager sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
 
-        //we subscribe to updates from the accelerometer and the magnetometer to get the most
-        // accurate heading reading possible
+        //we subscribe to updates from the accelerometer, magnetometer, and gyroscope to get the most
+        // accurate heading reading possible and full IMU data
         Sensor accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         Sensor magnetic = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+        Sensor gyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
+        
         sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL, SensorManager.SENSOR_DELAY_UI);
         sensorManager.registerListener(this, magnetic, SensorManager.SENSOR_DELAY_NORMAL, SensorManager.SENSOR_DELAY_UI);
+        if (gyroscope != null) {
+            sensorManager.registerListener(this, gyroscope, SensorManager.SENSOR_DELAY_NORMAL, SensorManager.SENSOR_DELAY_UI);
+        }
     }
 
     /**
@@ -79,6 +83,14 @@ public class SensorHelper extends Service implements SensorEventListener {
         return magnetometerReading;
     }
 
+    public static float[] getAccelerometerReadingThreeDim() {
+        return accelerometerReading;
+    }
+
+    public static float[] getGyroscopeReadingThreeDim() {
+        return gyroscopeReading;
+    }
+
     /**
      * Inherited from SensorEventListener.
      * Called by the system when there is new info from either of the sensors we
@@ -97,6 +109,10 @@ public class SensorHelper extends Service implements SensorEventListener {
 
         else if (event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD) {
             magnetometerReading = event.values;
+        }
+
+        else if (event.sensor.getType() == Sensor.TYPE_GYROSCOPE) {
+            gyroscopeReading = event.values;
         }
 
         float[] rotationMatrix = new float[9];

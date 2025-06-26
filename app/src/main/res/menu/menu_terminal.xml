@@ -77,4 +77,10 @@
     <item
         android:id="@+id/showStats"
         android:title="Show Packet Statistics" />
+    <item
+        android:id="@+id/manualReconnect"
+        android:title="Manual Reconnect" />
+    <item
+        android:id="@+id/manualHeadingLog"
+        android:title="Manual Heading Log" />
 </menu>

@@ -578,6 +578,24 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
                 Toast.makeText(getContext(), "Packet statistics printed to terminal", Toast.LENGTH_SHORT).show();
             }
             return true;
+        } else if (id == R.id.manualReconnect) {
+            if (connected != Connected.True) {
+                retryCount = 0; // Reset retry count for manual reconnect
+                status("Manual reconnect initiated...");
+                connect();
+                Toast.makeText(getContext(), "Manual reconnect initiated", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(getContext(), "Already connected", Toast.LENGTH_SHORT).show();
+            }
+            return true;
+        } else if (id == R.id.manualHeadingLog) {
+            if (service != null) {
+                // Trigger a manual heading log entry
+                service.triggerManualHeadingLog();
+                Toast.makeText(getContext(), "Manual heading log entry created", Toast.LENGTH_SHORT).show();
+                status("Manual heading log entry created");
+            }
+            return true;
         } else if (id == R.id.editRotate) {
             //TODO actually change the period in SerialService
             AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
@@ -793,6 +811,8 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
     public void onSerialConnect() {
         status("connected");
         connected = Connected.True;
+        // Reset retry count on successful connection
+        retryCount = 0;
         //send setup and start commands after delay via custom Handler
         Handler handler = new Handler();
         //Runnable clickSetup = () -> onSetupClicked(null);
@@ -822,12 +842,21 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
 
         if (retryCount < MAX_RETRIES) {
             retryCount++;
+            status("attempting reconnect... (attempt " + retryCount + " of " + MAX_RETRIES + ")");
             new Handler().postDelayed(() -> {
-                status("attempting reconnect... (attempt " + retryCount + ")");
-                connect();
+                try {
+                    connect();
+                } catch (Exception reconnectException) {
+                    status("reconnect attempt " + retryCount + " failed: " + reconnectException.getMessage());
+                    // Continue with next retry attempt
+                    if (retryCount < MAX_RETRIES) {
+                        onSerialIoError(reconnectException);
+                    }
+                }
             }, 1500);
         } else {
             status("max retries reached, manual restart required");
+            retryCount = 0; // Reset for next manual connection attempt
         }
     }
 
