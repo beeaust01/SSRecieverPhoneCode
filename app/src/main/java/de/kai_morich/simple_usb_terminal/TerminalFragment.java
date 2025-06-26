@@ -588,14 +588,14 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
                 Toast.makeText(getContext(), "Already connected", Toast.LENGTH_SHORT).show();
             }
             return true;
-        } else if (id == R.id.manualHeadingLog) {
-            if (service != null) {
-                // Trigger a manual heading log entry
-                service.triggerManualHeadingLog();
-                Toast.makeText(getContext(), "Manual heading log entry created", Toast.LENGTH_SHORT).show();
-                status("Manual heading log entry created");
-            }
-            return true;
+//        } else if (id == R.id.manualHeadingLog) {
+//            if (service != null) {
+//                // Trigger a manual heading log entry
+//                service.triggerManualHeadingLog();
+//                Toast.makeText(getContext(), "Manual heading log entry created", Toast.LENGTH_SHORT).show();
+//                status("Manual heading log entry created");
+//            }
+//            return true;
         } else if (id == R.id.gpsUpdateInterval) {
             // Show dialog to change GPS update interval
             AlertDialog.Builder builder = new AlertDialog.Builder(getContext());

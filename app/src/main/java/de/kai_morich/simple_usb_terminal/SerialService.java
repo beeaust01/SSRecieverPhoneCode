@@ -9,7 +9,6 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
-import android.location.Location;
 import android.os.BatteryManager;
 import android.os.Binder;
 import android.os.Build;
@@ -189,66 +188,6 @@ public class SerialService extends Service implements SerialListener {
      */
     public boolean isUseDetailedPacketOutput() { return useDetailedPacketOutput; }
     public void setUseDetailedPacketOutput(boolean useDetailed) { useDetailedPacketOutput = useDetailed; }
-
-    /**
-     * Check if currently connected to a device
-     */
-    public boolean isConnected() { return connected; }
-
-    /**
-     * Manually trigger a heading log entry for testing
-     */
-    public void triggerManualHeadingLog() {
-        try {
-            // Get GPS coordinates
-            Location location = LocationBroadcastReceiver.Companion.getCurrentLocation();
-            double lat = location != null ? location.getLatitude() : 0.0;
-            double lon = location != null ? location.getLongitude() : 0.0;
-            
-            // Get IMU data with null checks
-            float[] accelData = SensorHelper.getAccelerometerReadingThreeDim();
-            float[] magData = SensorHelper.getMagnetometerReadingThreeDim();
-            float[] gyroData = SensorHelper.getGyroscopeReadingThreeDim();
-            
-            // Ensure arrays are not null and have correct length
-            if (accelData == null || accelData.length < 3) accelData = new float[]{0.0f, 0.0f, 0.0f};
-            if (magData == null || magData.length < 3) magData = new float[]{0.0f, 0.0f, 0.0f};
-            if (gyroData == null || gyroData.length < 3) gyroData = new float[]{0.0f, 0.0f, 0.0f};
-            
-            // Create proper CSV format without spaces using StringBuilder to avoid format string issues
-            StringBuilder headingStr = new StringBuilder();
-            headingStr.append(lastHeadingTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH:mm:ss"))).append(",");
-            headingStr.append(String.format("%.3f", potAngle)).append(",");
-            headingStr.append(String.format("%.6f", lat)).append(",");
-            headingStr.append(String.format("%.6f", lon)).append(",");
-            headingStr.append(String.format("%.3f", accelData[0])).append(",");
-            headingStr.append(String.format("%.3f", accelData[1])).append(",");
-            headingStr.append(String.format("%.3f", accelData[2])).append(",");
-            headingStr.append(String.format("%.3f", magData[0])).append(",");
-            headingStr.append(String.format("%.3f", magData[1])).append(",");
-            headingStr.append(String.format("%.3f", magData[2])).append(",");
-            headingStr.append(String.format("%.3f", gyroData[0])).append(",");
-            headingStr.append(String.format("%.3f", gyroData[1])).append(",");
-            headingStr.append(String.format("%.3f", gyroData[2])).append(",");
-            headingStr.append(String.format("%.3f", headingMin)).append(",");
-            headingStr.append(String.format("%.3f", headingMax)).append(",");
-            headingStr.append(treatHeadingMinAsMax ? "true" : "false").append(",");
-            headingStr.append(String.format("%.3f", 0.0)).append(",");
-            headingStr.append("MANUAL_LOG\n");
-
-            // Check if FirebaseService is available before logging
-            try {
-                FirebaseService.Companion.getServiceInstance().appendHeading(headingStr.toString());
-                print_to_terminal("Manual heading log entry created with GPS: " + lat + ", " + lon);
-            } catch (Exception e) {
-                Log.e("SerialService", "Error logging manual heading data", e);
-                print_to_terminal("Error logging manual heading data: " + e.getMessage());
-            }
-        } catch (Exception e) {
-            Log.e("SerialService", "Error creating manual heading log", e);
-            print_to_terminal("Error creating manual heading log: " + e.getMessage());
-        }
-    }
 
     /**
      * Creates an intent with the input string and passes it to Terminal Fragment, which then prints it
@@ -526,54 +465,20 @@ public class SerialService extends Service implements SerialListener {
                         lastHeadingTime = LocalDateTime.now();
                     }
 
-                    // Get GPS coordinates
-                    Location location = LocationBroadcastReceiver.Companion.getCurrentLocation();
-                    double lat = location != null ? location.getLatitude() : 0.0;
-                    double lon = location != null ? location.getLongitude() : 0.0;
-                    
-                    // Get IMU data with null checks
-                    float[] accelData = SensorHelper.getAccelerometerReadingThreeDim();
-                    float[] magData = SensorHelper.getMagnetometerReadingThreeDim();
-                    float[] gyroData = SensorHelper.getGyroscopeReadingThreeDim();
-                    
-                    // Ensure arrays are not null and have correct length
-                    if (accelData == null || accelData.length < 3) accelData = new float[]{0.0f, 0.0f, 0.0f};
-                    if (magData == null || magData.length < 3) magData = new float[]{0.0f, 0.0f, 0.0f};
-                    if (gyroData == null || gyroData.length < 3) gyroData = new float[]{0.0f, 0.0f, 0.0f};
-                    
-                    try {
-                        // Create proper CSV format without spaces using StringBuilder to avoid format string issues
-                        StringBuilder headingStr = new StringBuilder();
-                        headingStr.append(lastHeadingTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH:mm:ss"))).append(",");
-                        headingStr.append(String.format("%.3f", currentHeading)).append(",");
-                        headingStr.append(String.format("%.6f", lat)).append(",");
-                        headingStr.append(String.format("%.6f", lon)).append(",");
-                        headingStr.append(String.format("%.3f", accelData[0])).append(",");
-                        headingStr.append(String.format("%.3f", accelData[1])).append(",");
-                        headingStr.append(String.format("%.3f", accelData[2])).append(",");
-                        headingStr.append(String.format("%.3f", magData[0])).append(",");
-                        headingStr.append(String.format("%.3f", magData[1])).append(",");
-                        headingStr.append(String.format("%.3f", magData[2])).append(",");
-                        headingStr.append(String.format("%.3f", gyroData[0])).append(",");
-                        headingStr.append(String.format("%.3f", gyroData[1])).append(",");
-                        headingStr.append(String.format("%.3f", gyroData[2])).append(",");
-                        headingStr.append(String.format("%.3f", headingMin)).append(",");
-                        headingStr.append(String.format("%.3f", headingMax)).append(",");
-                        headingStr.append(treatHeadingMinAsMax ? "true" : "false").append(",");
-                        headingStr.append(String.format("%.3f", oldHeading)).append(",");
-                        headingStr.append(rotationState.toString()).append("\n");
+                    String headingStr = String.join(", ",
+                            lastHeadingTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH:mm:ss")),
+                            String.valueOf(currentHeading),
+                            Arrays.toString(SensorHelper.getMagnetometerReadingThreeDim()),
+                            String.valueOf(headingMin),
+                            String.valueOf(headingMax),
+                            String.valueOf(treatHeadingMinAsMax),
+                            String.valueOf(oldHeading),
+                            rotationState.toString(),
+                            "\n"
+                    );
 
-                        // Check if FirebaseService is available before logging
-                        try {
-                            FirebaseService.Companion.getServiceInstance().appendHeading(headingStr.toString());
-                        } catch (Exception e) {
-                            Log.e("SerialService", "Error logging heading data", e);
-                            print_to_terminal("Error logging heading data: " + e.getMessage());
-                        }
-                    } catch (Exception e) {
-                        Log.e("SerialService", "Error formatting heading data", e);
-                        print_to_terminal("Error formatting heading data: " + e.getMessage());
-                    }
+                    FirebaseService.Companion.getServiceInstance().appendHeading(headingStr);
+//                    System.out.println("Wrote headings to firebase service companion: " + headingStr);
 
                 }
 
