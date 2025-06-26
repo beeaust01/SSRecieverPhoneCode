@@ -596,6 +596,32 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
                 status("Manual heading log entry created");
             }
             return true;
+        } else if (id == R.id.gpsUpdateInterval) {
+            // Show dialog to change GPS update interval
+            AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
+            builder.setTitle("GPS Update Interval (seconds)");
+
+            final EditText input = new EditText(getContext());
+            input.setInputType(InputType.TYPE_CLASS_NUMBER);
+            input.setText("60"); // Default 60 seconds
+            builder.setView(input);
+
+            builder.setPositiveButton("OK", (dialog, which) -> {
+                try {
+                    long interval = Long.parseLong(input.getText().toString());
+                    if (interval < 1) interval = 1; // Minimum 1 second
+                    if (interval > 300) interval = 300; // Maximum 5 minutes
+                    
+                    ((MainActivity) getActivity()).updateLocationInterval(interval);
+                    Toast.makeText(getContext(), "GPS update interval set to " + interval + " seconds", Toast.LENGTH_SHORT).show();
+                    status("GPS update interval: " + interval + " seconds");
+                } catch (NumberFormatException e) {
+                    Toast.makeText(getContext(), "Invalid number", Toast.LENGTH_SHORT).show();
+                }
+            });
+            builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
+            builder.show();
+            return true;
         } else if (id == R.id.editRotate) {
             //TODO actually change the period in SerialService
             AlertDialog.Builder builder = new AlertDialog.Builder(getContext());

@@ -80,15 +80,24 @@ public class SensorHelper extends Service implements SensorEventListener {
     }
 
     public static float[] getMagnetometerReadingThreeDim() {
-        return magnetometerReading;
+        if (magnetometerReading == null) {
+            magnetometerReading = new float[]{0.0f, 0.0f, 0.0f};
+        }
+        return magnetometerReading.clone();
     }
 
     public static float[] getAccelerometerReadingThreeDim() {
-        return accelerometerReading;
+        if (accelerometerReading == null) {
+            accelerometerReading = new float[]{0.0f, 0.0f, 0.0f};
+        }
+        return accelerometerReading.clone();
     }
 
     public static float[] getGyroscopeReadingThreeDim() {
-        return gyroscopeReading;
+        if (gyroscopeReading == null) {
+            gyroscopeReading = new float[]{0.0f, 0.0f, 0.0f};
+        }
+        return gyroscopeReading.clone();
     }
 
     /**
@@ -100,26 +109,40 @@ public class SensorHelper extends Service implements SensorEventListener {
 
     @Override
     public void onSensorChanged(SensorEvent event) {
-        if (event == null)
+        if (event == null || event.values == null)
             return;
 
         if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
-            accelerometerReading = event.values;
+            if (event.values.length >= 3) {
+                accelerometerReading = event.values.clone();
+            }
         }
 
         else if (event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD) {
-            magnetometerReading = event.values;
+            if (event.values.length >= 3) {
+                magnetometerReading = event.values.clone();
+            }
         }
 
         else if (event.sensor.getType() == Sensor.TYPE_GYROSCOPE) {
-            gyroscopeReading = event.values;
+            if (event.values.length >= 3) {
+                gyroscopeReading = event.values.clone();
+            }
         }
 
-        float[] rotationMatrix = new float[9];
-        SensorManager.getRotationMatrix(rotationMatrix, null, accelerometerReading, magnetometerReading);
-        float[] orientation = SensorManager.getOrientation(rotationMatrix, new float[3]);
-        heading = (Math.toDegrees(orientation[0]));
-
+        // Only calculate heading if we have both accelerometer and magnetometer data
+        if (accelerometerReading != null && magnetometerReading != null) {
+            try {
+                float[] rotationMatrix = new float[9];
+                if (SensorManager.getRotationMatrix(rotationMatrix, null, accelerometerReading, magnetometerReading)) {
+                    float[] orientation = SensorManager.getOrientation(rotationMatrix, new float[3]);
+                    heading = (Math.toDegrees(orientation[0]));
+                }
+            } catch (Exception e) {
+                // Log error but don't crash
+                android.util.Log.e("SensorHelper", "Error calculating heading", e);
+            }
+        }
     }
 
     /**

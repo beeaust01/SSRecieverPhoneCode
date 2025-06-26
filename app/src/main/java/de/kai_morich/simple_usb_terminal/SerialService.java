@@ -199,34 +199,55 @@ public class SerialService extends Service implements SerialListener {
      * Manually trigger a heading log entry for testing
      */
     public void triggerManualHeadingLog() {
-        // Get GPS coordinates
-        Location location = LocationBroadcastReceiver.Companion.getCurrentLocation();
-        double lat = location != null ? location.getLatitude() : 0.0;
-        double lon = location != null ? location.getLongitude() : 0.0;
-        
-        // Get IMU data
-        float[] accelData = SensorHelper.getAccelerometerReadingThreeDim();
-        float[] magData = SensorHelper.getMagnetometerReadingThreeDim();
-        float[] gyroData = SensorHelper.getGyroscopeReadingThreeDim();
-        
-        // Create proper CSV format without spaces
-        String headingStr = String.format("%s,%.3f,%.6f,%.6f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%s,%.3f,%s\n",
-                LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH:mm:ss")), // datetime
-                potAngle, // potentiometer angle
-                lat, // latitude
-                lon, // longitude
-                accelData[0], accelData[1], accelData[2], // accelerometer x,y,z
-                magData[0], magData[1], magData[2], // magnetometer x,y,z
-                gyroData[0], gyroData[1], gyroData[2], // gyroscope x,y,z
-                headingMin, // heading min
-                headingMax, // heading max
-                treatHeadingMinAsMax ? "true" : "false", // treat heading min as max
-                0.0, // old heading (not applicable for manual log)
-                "MANUAL_LOG" // rotation state
-        );
+        try {
+            // Get GPS coordinates
+            Location location = LocationBroadcastReceiver.Companion.getCurrentLocation();
+            double lat = location != null ? location.getLatitude() : 0.0;
+            double lon = location != null ? location.getLongitude() : 0.0;
+            
+            // Get IMU data with null checks
+            float[] accelData = SensorHelper.getAccelerometerReadingThreeDim();
+            float[] magData = SensorHelper.getMagnetometerReadingThreeDim();
+            float[] gyroData = SensorHelper.getGyroscopeReadingThreeDim();
+            
+            // Ensure arrays are not null and have correct length
+            if (accelData == null || accelData.length < 3) accelData = new float[]{0.0f, 0.0f, 0.0f};
+            if (magData == null || magData.length < 3) magData = new float[]{0.0f, 0.0f, 0.0f};
+            if (gyroData == null || gyroData.length < 3) gyroData = new float[]{0.0f, 0.0f, 0.0f};
+            
+            // Create proper CSV format without spaces using StringBuilder to avoid format string issues
+            StringBuilder headingStr = new StringBuilder();
+            headingStr.append(lastHeadingTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH:mm:ss"))).append(",");
+            headingStr.append(String.format("%.3f", potAngle)).append(",");
+            headingStr.append(String.format("%.6f", lat)).append(",");
+            headingStr.append(String.format("%.6f", lon)).append(",");
+            headingStr.append(String.format("%.3f", accelData[0])).append(",");
+            headingStr.append(String.format("%.3f", accelData[1])).append(",");
+            headingStr.append(String.format("%.3f", accelData[2])).append(",");
+            headingStr.append(String.format("%.3f", magData[0])).append(",");
+            headingStr.append(String.format("%.3f", magData[1])).append(",");
+            headingStr.append(String.format("%.3f", magData[2])).append(",");
+            headingStr.append(String.format("%.3f", gyroData[0])).append(",");
+            headingStr.append(String.format("%.3f", gyroData[1])).append(",");
+            headingStr.append(String.format("%.3f", gyroData[2])).append(",");
+            headingStr.append(String.format("%.3f", headingMin)).append(",");
+            headingStr.append(String.format("%.3f", headingMax)).append(",");
+            headingStr.append(treatHeadingMinAsMax ? "true" : "false").append(",");
+            headingStr.append(String.format("%.3f", 0.0)).append(",");
+            headingStr.append("MANUAL_LOG\n");
 
-        FirebaseService.Companion.getServiceInstance().appendHeading(headingStr);
-        print_to_terminal("Manual heading log entry created with GPS: " + lat + ", " + lon);
+            // Check if FirebaseService is available before logging
+            try {
+                FirebaseService.Companion.getServiceInstance().appendHeading(headingStr.toString());
+                print_to_terminal("Manual heading log entry created with GPS: " + lat + ", " + lon);
+            } catch (Exception e) {
+                Log.e("SerialService", "Error logging manual heading data", e);
+                print_to_terminal("Error logging manual heading data: " + e.getMessage());
+            }
+        } catch (Exception e) {
+            Log.e("SerialService", "Error creating manual heading log", e);
+            print_to_terminal("Error creating manual heading log: " + e.getMessage());
+        }
     }
 
     /**
@@ -510,29 +531,49 @@ public class SerialService extends Service implements SerialListener {
                     double lat = location != null ? location.getLatitude() : 0.0;
                     double lon = location != null ? location.getLongitude() : 0.0;
                     
-                    // Get IMU data
+                    // Get IMU data with null checks
                     float[] accelData = SensorHelper.getAccelerometerReadingThreeDim();
                     float[] magData = SensorHelper.getMagnetometerReadingThreeDim();
                     float[] gyroData = SensorHelper.getGyroscopeReadingThreeDim();
                     
-                    // Create proper CSV format without spaces
-                    String headingStr = String.format("%s,%.3f,%.6f,%.6f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%s,%.3f,%s\n",
-                            lastHeadingTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH:mm:ss")), // datetime
-                            currentHeading, // potentiometer angle
-                            lat, // latitude
-                            lon, // longitude
-                            accelData[0], accelData[1], accelData[2], // accelerometer x,y,z
-                            magData[0], magData[1], magData[2], // magnetometer x,y,z
-                            gyroData[0], gyroData[1], gyroData[2], // gyroscope x,y,z
-                            headingMin, // heading min
-                            headingMax, // heading max
-                            treatHeadingMinAsMax ? "true" : "false", // treat heading min as max
-                            oldHeading, // old heading
-                            rotationState.toString() // rotation state
-                    );
+                    // Ensure arrays are not null and have correct length
+                    if (accelData == null || accelData.length < 3) accelData = new float[]{0.0f, 0.0f, 0.0f};
+                    if (magData == null || magData.length < 3) magData = new float[]{0.0f, 0.0f, 0.0f};
+                    if (gyroData == null || gyroData.length < 3) gyroData = new float[]{0.0f, 0.0f, 0.0f};
+                    
+                    try {
+                        // Create proper CSV format without spaces using StringBuilder to avoid format string issues
+                        StringBuilder headingStr = new StringBuilder();
+                        headingStr.append(lastHeadingTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH:mm:ss"))).append(",");
+                        headingStr.append(String.format("%.3f", currentHeading)).append(",");
+                        headingStr.append(String.format("%.6f", lat)).append(",");
+                        headingStr.append(String.format("%.6f", lon)).append(",");
+                        headingStr.append(String.format("%.3f", accelData[0])).append(",");
+                        headingStr.append(String.format("%.3f", accelData[1])).append(",");
+                        headingStr.append(String.format("%.3f", accelData[2])).append(",");
+                        headingStr.append(String.format("%.3f", magData[0])).append(",");
+                        headingStr.append(String.format("%.3f", magData[1])).append(",");
+                        headingStr.append(String.format("%.3f", magData[2])).append(",");
+                        headingStr.append(String.format("%.3f", gyroData[0])).append(",");
+                        headingStr.append(String.format("%.3f", gyroData[1])).append(",");
+                        headingStr.append(String.format("%.3f", gyroData[2])).append(",");
+                        headingStr.append(String.format("%.3f", headingMin)).append(",");
+                        headingStr.append(String.format("%.3f", headingMax)).append(",");
+                        headingStr.append(treatHeadingMinAsMax ? "true" : "false").append(",");
+                        headingStr.append(String.format("%.3f", oldHeading)).append(",");
+                        headingStr.append(rotationState.toString()).append("\n");
 
-                    FirebaseService.Companion.getServiceInstance().appendHeading(headingStr);
-//                    System.out.println("Wrote headings to firebase service companion: " + headingStr);
+                        // Check if FirebaseService is available before logging
+                        try {
+                            FirebaseService.Companion.getServiceInstance().appendHeading(headingStr.toString());
+                        } catch (Exception e) {
+                            Log.e("SerialService", "Error logging heading data", e);
+                            print_to_terminal("Error logging heading data: " + e.getMessage());
+                        }
+                    } catch (Exception e) {
+                        Log.e("SerialService", "Error formatting heading data", e);
+                        print_to_terminal("Error formatting heading data: " + e.getMessage());
+                    }
 
                 }
 

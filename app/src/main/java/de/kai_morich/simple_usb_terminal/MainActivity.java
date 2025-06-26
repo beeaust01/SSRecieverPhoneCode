@@ -273,6 +273,9 @@ public class MainActivity extends AppCompatActivity implements FragmentManager.O
         locationHelper.changePriority(priority);
     }
 
+    public void updateLocationInterval(long intervalSeconds){
+        locationHelper.changeUpdateInterval(intervalSeconds);
+    }
 
     public void uploadFile(File file) {
         Uri uri = Uri.fromFile(file);

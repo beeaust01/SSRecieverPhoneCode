@@ -44,7 +44,7 @@ class LocationHelper constructor(private val context: Context) {
 //        // | PRIORITY_LOW_POWER               | Favors low power usage at the expense of location accuracy                   |
 //        // | PRIORITY_PASSIVE                 | Ensure no extra power usage, only receives location as other clients request |
 //        // +----------------------------------+------------------------------------------------------------------------------+
-        setPriority(Priority.PRIORITY_LOW_POWER)
+        setPriority(Priority.PRIORITY_BALANCED_POWER_ACCURACY)
 
         // other parameters of LocationRequest that may be worth messing with:
         // smallestDisplacement, expirationTime
@@ -55,6 +55,14 @@ class LocationHelper constructor(private val context: Context) {
         startLocationUpdates()
     }
 
+    fun changeUpdateInterval(intervalSeconds: Long) {
+        locationRequest = LocationRequest.Builder(intervalSeconds * 1000).apply {
+            setMinUpdateIntervalMillis(intervalSeconds * 1000)
+            setMaxUpdateDelayMillis(intervalSeconds * 1000)
+            setPriority(locationRequest.priority)
+        }.build()
+        startLocationUpdates()
+    }
 
     // configure where we want the system to send the result of our request
     private val locationUpdatePendingIntent: PendingIntent by lazy {

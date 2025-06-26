@@ -83,4 +83,7 @@
     <item
         android:id="@+id/manualHeadingLog"
         android:title="Manual Heading Log" />
+    <item
+        android:id="@+id/gpsUpdateInterval"
+        android:title="GPS Update Interval" />
 </menu>
