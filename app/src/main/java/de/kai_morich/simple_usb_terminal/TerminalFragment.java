@@ -154,6 +154,8 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
     public static final String GENERAL_PURPOSE_PRINT = "TerminalFragment.GENERAL_PURPOSE_PRINT";
 
     public static final String GENERAL_PURPOSE_STRING = "TerminalFragment.GENERAL_PURPOSE_STRING";
+    public static final String GENERAL_PURPOSE_PRINT_COLORED = "TerminalFragment.GENERAL_PURPOSE_PRINT_COLORED";
+    public static final String GENERAL_PURPOSE_COLOR = "TerminalFragment.GENERAL_PURPOSE_COLOR";
 
     private LocalBroadcastManager bManager;
 
@@ -161,6 +163,7 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         @Override
         public void onReceive(Context context, Intent intent) {
             String s = null;
+            Integer color = null;
 //            System.out.println(intent.getAction());
             if (intent.getAction().equals(RECEIVE_HEADING_STATE)){
                 String state = intent.getStringExtra(RECEIVE_ROTATION_STATE);
@@ -179,9 +182,22 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
                 s = intent.getExtras().getString(GENERAL_PURPOSE_STRING);
                 System.out.println(s);
             }
+            else if (intent.getAction().equals(GENERAL_PURPOSE_PRINT_COLORED)) {
+                s = intent.getExtras().getString(GENERAL_PURPOSE_STRING);
+                color = intent.getExtras().getInt(GENERAL_PURPOSE_COLOR);
+                System.out.println(s);
+            }
 
             if(receiveText != null && s != null){
-                receiveText.append(s+"\n");
+                if (color != null) {
+                    // Apply color formatting
+                    SpannableStringBuilder spn = new SpannableStringBuilder(s + "\n");
+                    spn.setSpan(new ForegroundColorSpan(color), 0, spn.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    receiveText.append(spn);
+                } else {
+                    // Default formatting
+                    receiveText.append(s + "\n");
+                }
             }
         }
     };
@@ -206,6 +222,7 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         IntentFilter filter = new IntentFilter();
         filter.addAction(RECEIVE_HEADING_STATE);
         filter.addAction(GENERAL_PURPOSE_PRINT);
+        filter.addAction(GENERAL_PURPOSE_PRINT_COLORED);
         bManager.registerReceiver(terminalReceiver, filter);
     }
 
@@ -482,6 +499,9 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
     public void onCreateOptionsMenu(@NonNull Menu menu, MenuInflater inflater) {
         inflater.inflate(R.menu.menu_terminal, menu);
         menu.findItem(R.id.truncate).setChecked(truncate);
+        if (service != null) {
+            menu.findItem(R.id.detailedPacketOutput).setChecked(service.isUseDetailedPacketOutput());
+        }
     }
 
     @Override
@@ -496,6 +516,16 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         } else if (id == R.id.truncate) {
             truncate = !truncate;
             item.setChecked(truncate);
+            return true;
+        } else if (id == R.id.detailedPacketOutput) {
+            if (service != null) {
+                boolean newState = !service.isUseDetailedPacketOutput();
+                service.setUseDetailedPacketOutput(newState);
+                item.setChecked(newState);
+                String status = newState ? "Detailed" : "Simplified";
+                Toast.makeText(getContext(), "Packet output: " + status, Toast.LENGTH_SHORT).show();
+                status("Packet output format: " + status);
+            }
             return true;
         } else if (id == R.id.manualCW) {
             send(BGapi.ROTATE_CW);
@@ -519,8 +549,80 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         } else if (id == R.id.getAngle) {
             send(BGapi.GET_ANGLE);
             return true;
-        }
-        else if (id == R.id.editRotate) {
+        } else if (id == R.id.showLogPath) {
+            if (service != null) {
+                String logPath = service.getLogFilePath();
+                if (logPath != null) {
+                    Toast.makeText(getContext(), "Log file: " + logPath, Toast.LENGTH_LONG).show();
+                    status("Log file path: " + logPath);
+                } else {
+                    Toast.makeText(getContext(), "Log file path not available", Toast.LENGTH_SHORT).show();
+                }
+            }
+            return true;
+        } else if (id == R.id.clearLog) {
+            if (service != null) {
+                service.clearLogFile();
+                Toast.makeText(getContext(), "Log file cleared", Toast.LENGTH_SHORT).show();
+            }
+            return true;
+        } else if (id == R.id.debugBuffer) {
+            if (service != null) {
+                service.debugBufferContents();
+                Toast.makeText(getContext(), "Buffer debug info printed to terminal", Toast.LENGTH_SHORT).show();
+            }
+            return true;
+        } else if (id == R.id.showStats) {
+            if (service != null) {
+                service.displayPacketStatistics();
+                Toast.makeText(getContext(), "Packet statistics printed to terminal", Toast.LENGTH_SHORT).show();
+            }
+            return true;
+        } else if (id == R.id.manualReconnect) {
+            if (connected != Connected.True) {
+                retryCount = 0; // Reset retry count for manual reconnect
+                status("Manual reconnect initiated...");
+                connect();
+                Toast.makeText(getContext(), "Manual reconnect initiated", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(getContext(), "Already connected", Toast.LENGTH_SHORT).show();
+            }
+            return true;
+//        } else if (id == R.id.manualHeadingLog) {
+//            if (service != null) {
+//                // Trigger a manual heading log entry
+//                service.triggerManualHeadingLog();
+//                Toast.makeText(getContext(), "Manual heading log entry created", Toast.LENGTH_SHORT).show();
+//                status("Manual heading log entry created");
+//            }
+//            return true;
+        } else if (id == R.id.gpsUpdateInterval) {
+            // Show dialog to change GPS update interval
+            AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
+            builder.setTitle("GPS Update Interval (seconds)");
+
+            final EditText input = new EditText(getContext());
+            input.setInputType(InputType.TYPE_CLASS_NUMBER);
+            input.setText("60"); // Default 60 seconds
+            builder.setView(input);
+
+            builder.setPositiveButton("OK", (dialog, which) -> {
+                try {
+                    long interval = Long.parseLong(input.getText().toString());
+                    if (interval < 1) interval = 1; // Minimum 1 second
+                    if (interval > 300) interval = 300; // Maximum 5 minutes
+                    
+                    ((MainActivity) getActivity()).updateLocationInterval(interval);
+                    Toast.makeText(getContext(), "GPS update interval set to " + interval + " seconds", Toast.LENGTH_SHORT).show();
+                    status("GPS update interval: " + interval + " seconds");
+                } catch (NumberFormatException e) {
+                    Toast.makeText(getContext(), "Invalid number", Toast.LENGTH_SHORT).show();
+                }
+            });
+            builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
+            builder.show();
+            return true;
+        } else if (id == R.id.editRotate) {
             //TODO actually change the period in SerialService
             AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
             builder.setTitle("New Rotation Period UNUSED");
@@ -657,25 +759,25 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
 //        span.setSpan(new ForegroundColorSpan(Color.CYAN), 0, span.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
 //        receiveText.append(span);
         if (BGapi.isScanReportEvent(data)) {
-            //original script recorded time, addr, rssi, channel, and data
-            //TODO: Non-UI logic - should not be in UI class
-            if (pendingPacket != null) {
-                String msg = pendingPacket.toString();
-                if (truncate) {
-                    int length = msg.length();
-                    if (length > msg.lastIndexOf('\n') + 40) {
-                        length = msg.lastIndexOf('\n') + 40;
-                    }
-                    msg = msg.substring(0, length) + "…";
-                }
-                SpannableStringBuilder spn = new SpannableStringBuilder(msg + "\n\n");
-                spn.setSpan(new ForegroundColorSpan(Color.MAGENTA), 0, spn.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-                receiveText.append(spn);
-            }
-            if (data.length <= 21)
-                return;
-
-            pendingPacket = BlePacket.parsePacket(data);
+//            //original script recorded time, addr, rssi, channel, and data
+//            //TODO: Non-UI logic - should not be in UI class
+//            if (pendingPacket != null) {
+//                String msg = pendingPacket.toString();
+//                if (truncate) {
+//                    int length = msg.length();
+//                    if (length > msg.lastIndexOf('\n') + 40) {
+//                        length = msg.lastIndexOf('\n') + 40;
+//                    }
+//                    msg = msg.substring(0, length) + "…";
+//                }
+//                SpannableStringBuilder spn = new SpannableStringBuilder(msg + "\n\n");
+//                spn.setSpan(new ForegroundColorSpan(Color.MAGENTA), 0, spn.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+//                receiveText.append(spn);
+//            }
+//            if (data.length <= 21)
+//                return;
+//
+//            pendingPacket = BlePacket.parsePacket(data);
         } else if (BGapi.isAngleOrBattResponse(data)) {
 //            byte[] lastTwoBytes = new byte[2];
 ////             Extract the last 2 bytes
@@ -706,7 +808,7 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
             //until the data has a terminator, assume packets that aren't a known header are data that was truncated
             if (pendingPacket != null)
                 pendingPacket.appendData(data);
-        } //commented out this else statement 6/10 by Austin Bee because it was causing all the packets to be stuck together.
+        }
 
         //If the text in receiveText is getting too large to be reasonable, cut it off
         if(receiveText.getText().length() > 8000){
@@ -735,6 +837,8 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
     public void onSerialConnect() {
         status("connected");
         connected = Connected.True;
+        // Reset retry count on successful connection
+        retryCount = 0;
         //send setup and start commands after delay via custom Handler
         Handler handler = new Handler();
         //Runnable clickSetup = () -> onSetupClicked(null);
@@ -764,12 +868,21 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
 
         if (retryCount < MAX_RETRIES) {
             retryCount++;
+            status("attempting reconnect... (attempt " + retryCount + " of " + MAX_RETRIES + ")");
             new Handler().postDelayed(() -> {
-                status("attempting reconnect... (attempt " + retryCount + ")");
-                connect();
+                try {
+                    connect();
+                } catch (Exception reconnectException) {
+                    status("reconnect attempt " + retryCount + " failed: " + reconnectException.getMessage());
+                    // Continue with next retry attempt
+                    if (retryCount < MAX_RETRIES) {
+                        onSerialIoError(reconnectException);
+                    }
+                }
             }, 1500);
         } else {
             status("max retries reached, manual restart required");
+            retryCount = 0; // Reset for next manual connection attempt
         }
     }
 

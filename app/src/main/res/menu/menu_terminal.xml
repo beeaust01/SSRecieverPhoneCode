@@ -25,6 +25,11 @@
         android:checkable="true"
         android:title="Truncate Data"
         app:showAsAction="never" />
+    <item
+        android:id="@+id/detailedPacketOutput"
+        android:checkable="true"
+        android:title="Detailed Packet Output"
+        app:showAsAction="never" />
     <!--    <item-->
     <!--        android:id="@+id/sendBreak"-->
     <!--        android:title="Send BREAK"-->
@@ -60,4 +65,25 @@
     <item
         android:id="@+id/getAngle"
         android:title="Get Angle" />
+    <item
+        android:id="@+id/showLogPath"
+        android:title="Show Log File Path" />
+    <item
+        android:id="@+id/clearLog"
+        android:title="Clear Log File" />
+    <item
+        android:id="@+id/debugBuffer"
+        android:title="Debug Buffer Contents" />
+    <item
+        android:id="@+id/showStats"
+        android:title="Show Packet Statistics" />
+    <item
+        android:id="@+id/manualReconnect"
+        android:title="Manual Reconnect" />
+    <item
+        android:id="@+id/manualHeadingLog"
+        android:title="Manual Heading Log" />
+    <item
+        android:id="@+id/gpsUpdateInterval"
+        android:title="GPS Update Interval" />
 </menu>

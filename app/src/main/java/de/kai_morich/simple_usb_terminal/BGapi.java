@@ -28,7 +28,7 @@ public class BGapi {
         knownResponses.put("message_rotate_cw_rsp", new byte[]{0x20, 0x04, (byte) 0xFF, 0x00, 0x00, 0x00, 0x01, 0x03});
         knownResponses.put("message_rotate_ccw_rsp", new byte[]{0x20, 0x04, (byte) 0xFF, 0x00, 0x00, 0x00, 0x01, 0x04});
         knownResponses.put("message_rotate_stop_rsp", new byte[]{0x20, 0x04, (byte) 0xFF, 0x00, 0x00, 0x00, 0x01, 0x05});
-        knownResponses.put("message_read_angle_rsp", new byte[]{0x20, 0x04, (byte) 0xFF, 0x00, 0x00, 0x00, 0x01, 0x06});
+        knownResponses.put("message_read_angle_rsp", new byte[]{(byte) 0xA0, 0x04, (byte) 0xFF, 0x00, 0x03});
         knownResponses.put("message_user_to_target_rsp", new byte[]{0x20, 0x03, (byte) 0xFF, 0x00, 0x01, 0x00, 0x00});
         //knownResponses.put("message_related_rsp???", new byte[]{0x20, 0x03, (byte) 0xFF, 0x00, 0x01, 0x00, 0x00});
         knownResponses.put("message_system_boot", new byte[]{(byte) 0xA0, 0x12, 0x01, 0x00, 0x03, 0x00, 0x03, 0x00, 0x02, 0x00,
@@ -71,16 +71,9 @@ public class BGapi {
         //updated to reflect new extended advertisement report logic. Not totally sure why byte-by-
         //byte comparison is done, just following existing style for now.
         //
-
-        //old identifyer
-//        return bytes.length > 3 && bytes[0] == (byte) 0xA0 && bytes[1] == (byte) 0xF7
-//                && bytes[2] == 0x05 && bytes[3] == 0x01;
-
-        //only accepts packets that say BYU
-        return bytes.length > 40 && bytes[34] == 0x04 && bytes[35] == 0x08
-                && bytes[36] == 0x42 && bytes[37] == 0x59 && bytes[38] == 0x55;
+        return bytes.length > 3 && bytes[0] == (byte) 0xA0 && bytes[1] == (byte) 0x04
+                && bytes[2] == (byte)0xFF && bytes[3] == (byte)0x00;
     }
-
 
     public static boolean isAngleOrBattResponse(byte[] bytes) {
 
@@ -97,16 +90,54 @@ public class BGapi {
 
     public static boolean isKnownResponse(byte[] bytes) {
         for (byte[] response : knownResponses.values()) {
-            if (Arrays.equals(response, bytes))
+            if (findPatternInBytes(bytes, response) >= 0) {
                 return true;
+            }
         }
         return false;
     }
 
+    /**
+     * Find a pattern within a byte array
+     * @param buffer The buffer to search in
+     * @param pattern The pattern to search for
+     * @return The starting position of the pattern, or -1 if not found
+     */
+    private static int findPatternInBytes(byte[] buffer, byte[] pattern) {
+        for (int i = 0; i <= buffer.length - pattern.length; i++) {
+            boolean found = true;
+            for (int j = 0; j < pattern.length; j++) {
+                if (buffer[i + j] != pattern[j]) {
+                    found = false;
+                    break;
+                }
+            }
+            if (found) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     public static String getResponseName(byte[] bytes) {
         for (Map.Entry<String, byte[]> entry : knownResponses.entrySet()) {
-            if (Arrays.equals(entry.getValue(), bytes)) {
+            if (findPatternInBytes(bytes, entry.getValue()) >= 0) {
                 return entry.getKey();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Get the response name and position where it was found
+     * @param bytes The byte array to search in
+     * @return An array containing [responseName, position] or null if not found
+     */
+    public static Object[] getResponseNameAndPosition(byte[] bytes) {
+        for (Map.Entry<String, byte[]> entry : knownResponses.entrySet()) {
+            int position = findPatternInBytes(bytes, entry.getValue());
+            if (position >= 0) {
+                return new Object[]{entry.getKey(), position};
             }
         }
         return null;
@@ -137,5 +168,9 @@ public class BGapi {
             }
         }
         return false;
+    }
+
+    public static Map<String, byte[]> getKnownResponses() {
+        return new HashMap<>(knownResponses);
     }
 }
