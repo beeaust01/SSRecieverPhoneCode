@@ -24,15 +24,15 @@ class LocationHelper constructor(private val context: Context) {
         LocationServices.getFusedLocationProviderClient(context)
 
     // Configure parameters according to our location needs
-    private var locationRequest: LocationRequest = LocationRequest.Builder(TimeUnit.MINUTES.toMillis(5)).apply {
+    private var locationRequest: LocationRequest = LocationRequest.Builder(TimeUnit.SECONDS.toMillis(60)).apply {
         // Sets the desired interval for active location updates. This is inexact
 //        setInterval(TimeUnit.MINUTES.toMillis(5))
 //
 //        // sets the fastest rate for active location updates. Will never be faster
-          setMinUpdateIntervalMillis(TimeUnit.MINUTES.toMillis(1))
+          setMinUpdateIntervalMillis(TimeUnit.SECONDS.toMillis(30))
 //
 //        //sets the max time between when location is reported
-          setMaxUpdateDelayMillis(TimeUnit.MINUTES.toMillis(1))
+          setMaxUpdateDelayMillis(TimeUnit.SECONDS.toMillis(60))
 //
 //        //TODO: test how different the levels of power/accuracy change
 //
@@ -44,7 +44,7 @@ class LocationHelper constructor(private val context: Context) {
 //        // | PRIORITY_LOW_POWER               | Favors low power usage at the expense of location accuracy                   |
 //        // | PRIORITY_PASSIVE                 | Ensure no extra power usage, only receives location as other clients request |
 //        // +----------------------------------+------------------------------------------------------------------------------+
-        setPriority(Priority.PRIORITY_BALANCED_POWER_ACCURACY)
+        setPriority(Priority.PRIORITY_HIGH_ACCURACY)
 
         // other parameters of LocationRequest that may be worth messing with:
         // smallestDisplacement, expirationTime
