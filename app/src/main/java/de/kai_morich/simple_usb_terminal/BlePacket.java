@@ -120,7 +120,7 @@ public class BlePacket {
         //byte[] data = Arrays.copyOfRange(bytes, 41, 284); //31 to byte.len for legacy BLE
         //int dataStart =0; //for troubleshooting
         int dataStart =32;
-        int dataEnd = Math.min(bytes.length, 273);  // Never go past byte 287
+        int dataEnd = Math.min(bytes.length, 274);  // Never go past byte 287
         byte[] data = Arrays.copyOfRange(bytes, dataStart, dataEnd);
 
         return new BlePacket(addr, rssi, channel, packet_type, data);

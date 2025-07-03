@@ -465,10 +465,30 @@ public class SerialService extends Service implements SerialListener {
                         lastHeadingTime = LocalDateTime.now();
                     }
 
+                    // Get GPS data from LocationBroadcastReceiver
+                    String latitude = "0.0";
+                    String longitude = "0.0";
+                    if (de.kai_morich.simple_usb_terminal.LocationBroadcastReceiver.currentLocation != null) {
+                        latitude = String.valueOf(de.kai_morich.simple_usb_terminal.LocationBroadcastReceiver.currentLocation.getLatitude());
+                        longitude = String.valueOf(de.kai_morich.simple_usb_terminal.LocationBroadcastReceiver.currentLocation.getLongitude());
+                        Log.d("SerialService", "GPS data available: lat=" + latitude + ", lon=" + longitude);
+                    } else {
+                        Log.d("SerialService", "GPS data not available, using default values");
+                    }
+
+                    // Get sensor data
+                    float[] accelData = SensorHelper.getAccelerometerReadingThreeDim();
+                    float[] magData = SensorHelper.getMagnetometerReadingThreeDim();
+                    float[] gyroData = SensorHelper.getGyroscopeReadingThreeDim();
+
                     String headingStr = String.join(", ",
                             lastHeadingTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH:mm:ss")),
                             String.valueOf(currentHeading),
-                            Arrays.toString(SensorHelper.getMagnetometerReadingThreeDim()),
+                            latitude,
+                            longitude,
+                            String.valueOf(accelData[0]) + "," + String.valueOf(accelData[1]) + "," + String.valueOf(accelData[2]),
+                            String.valueOf(magData[0]) + "," + String.valueOf(magData[1]) + "," + String.valueOf(magData[2]),
+                            String.valueOf(gyroData[0]) + "," + String.valueOf(gyroData[1]) + "," + String.valueOf(gyroData[2]),
                             String.valueOf(headingMin),
                             String.valueOf(headingMax),
                             String.valueOf(treatHeadingMinAsMax),
@@ -478,6 +498,7 @@ public class SerialService extends Service implements SerialListener {
                     );
 
                     FirebaseService.Companion.getServiceInstance().appendHeading(headingStr);
+                    Log.d("SerialService", "Heading data written to Firebase: " + headingStr.substring(0, Math.min(headingStr.length(), 100)) + "...");
 //                    System.out.println("Wrote headings to firebase service companion: " + headingStr);
 
                 }
