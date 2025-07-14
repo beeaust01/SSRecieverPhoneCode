@@ -98,9 +98,9 @@ public class SerialService extends Service implements SerialListener {
     //^^ default at 0 but user can set it to what they want.
     private static double headingMax = 360.0;
     //^^default to 360 but rewritten as what user wants.
-    private static double MotorHeadingMin = -30;
+    private static double MotorHeadingMin = -60;
     //^^ motor limit at -30
-    private static double MotorHeadingMax = 390;
+    private static double MotorHeadingMax = 420;
     //^^ motor limit at -30
     private static boolean treatHeadingMinAsMax = false;
     //in degrees, if the last time the motor moved less than this amount,
