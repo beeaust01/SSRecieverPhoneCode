@@ -195,7 +195,7 @@ public class SerialService extends Service implements SerialListener {
      */
     void print_to_terminal(String input) {
         // Write to log file
-        writeToLogFile(input);
+        // writeToLogFile(input);
         
         // Original terminal printing logic
         Intent intent = new Intent(TerminalFragment.GENERAL_PURPOSE_PRINT);
@@ -208,7 +208,7 @@ public class SerialService extends Service implements SerialListener {
      */
     void print_to_terminal(String input, int color) {
         // Write to log file
-        writeToLogFile(input);
+        // writeToLogFile(input);
         
         // Colored terminal printing logic
         Intent intent = new Intent(TerminalFragment.GENERAL_PURPOSE_PRINT_COLORED);
