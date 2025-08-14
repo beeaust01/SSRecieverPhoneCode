@@ -2559,6 +2559,8 @@ id always
 id animateToEnd
 id animateToStart
 id arc
+id arrow_container
+id arrow_icon
 id asConfigured
 id async
 id auto
@@ -2581,6 +2583,8 @@ id browser_actions_menu_item_icon
 id browser_actions_menu_item_text
 id browser_actions_menu_items
 id browser_actions_menu_view
+id btn_accessibility_settings
+id btn_set_reboot_time
 id buttonPanel
 id cancel_button
 id center
@@ -2829,6 +2833,8 @@ id progress_circular
 id progress_horizontal
 id radio
 id ratio
+id reboot_content
+id reboot_panel
 id receive_text
 id rectangles
 id refresh
@@ -2956,6 +2962,7 @@ id transition_scene_layoutid_cache
 id transition_transform
 id triangle
 id truncate
+id tv_reboot_status
 id unchecked
 id uniform
 id unlabeled
@@ -4520,6 +4527,7 @@ styleable View android_theme android_focusable paddingEnd paddingStart theme
 styleable ViewBackgroundHelper android_background backgroundTint backgroundTintMode
 styleable ViewPager2 android_orientation
 styleable ViewStubCompat android_id android_layout android_inflatedId
+xml a11y_rebooter_config
 xml image_share_filepaths
 xml standalone_badge
 xml standalone_badge_gravity_bottom_end

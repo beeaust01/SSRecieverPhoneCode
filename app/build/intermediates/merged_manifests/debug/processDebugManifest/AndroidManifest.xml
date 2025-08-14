@@ -14,11 +14,14 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-
-    <!-- Although the *SdkVersion is captured in gradle build files, this is required for non gradle builds -->
-    <!-- <uses-sdk android:minSdkVersion="14"/> -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.DEVICE_POWER" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.INTERNET" /> <!-- mipmap/ic_launcher created with Android Studio -> New -> Image Asset using @color/colorPrimaryDark as background color -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- mipmap/ic_launcher created with Android Studio -> New -> Image Asset using @color/colorPrimaryDark as background color -->
     <application
         android:appComponentFactory="androidx.core.app.CoreComponentFactory"
         android:debuggable="true"
@@ -62,9 +65,26 @@
         <service android:name="de.kai_morich.simple_usb_terminal.SerialService" />
         <service android:name="de.kai_morich.simple_usb_terminal.SensorHelper" />
         <service android:name="de.kai_morich.simple_usb_terminal.FirebaseService" />
+        <service android:name="de.kai_morich.simple_usb_terminal.RebootMonitoringService" />
+        <service android:name="de.kai_morich.simple_usb_terminal.ScreenSleepService" />
+        <service
+            android:name="de.austin_bee.reboot.A11yRebooterService"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" >
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/a11y_rebooter_config" />
+        </service>
 
         <receiver android:name="de.kai_morich.simple_usb_terminal.FirebaseService$ActionListener" />
         <receiver android:name="de.kai_morich.simple_usb_terminal.SerialService$ActionListener" />
+        <receiver
+            android:name="de.austin_bee.reboot.RebootAlarmReceiver"
+            android:exported="false" />
         <receiver
             android:name="de.kai_morich.simple_usb_terminal.RestarterBroadcastReceiver"
             android:enabled="true"

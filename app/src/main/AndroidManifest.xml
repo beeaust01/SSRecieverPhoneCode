@@ -8,6 +8,12 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.DEVICE_POWER" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- mipmap/ic_launcher created with Android Studio -> New -> Image Asset using @color/colorPrimaryDark as background color -->
     <application
@@ -45,8 +51,24 @@
         <service android:name=".SerialService" />
         <service android:name=".SensorHelper" />
         <service android:name=".FirebaseService" />
+        <service android:name=".RebootMonitoringService" />
+        <service android:name=".ScreenSleepService" />
+        <service
+            android:name="de.austin_bee.reboot.A11yRebooterService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true">
+          <intent-filter>
+            <action android:name="android.accessibilityservice.AccessibilityService"/>
+          </intent-filter>
+          <meta-data
+              android:name="android.accessibilityservice"
+              android:resource="@xml/a11y_rebooter_config"/>
+        </service>
         <receiver android:name=".FirebaseService$ActionListener" />
         <receiver android:name=".SerialService$ActionListener" />
+        <receiver
+            android:name="de.austin_bee.reboot.RebootAlarmReceiver"
+            android:exported="false" />
         <receiver android:name=".RestarterBroadcastReceiver"
             android:label="StartServiceAtBoot"
             android:enabled="true"
